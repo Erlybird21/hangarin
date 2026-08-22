@@ -132,14 +132,72 @@ The admin interface provides full management of:
 - SubTasks
 - Notes
 
+## Deployment
+
+The application is deployed to PythonAnywhere:
+
+**Production URL:** https://erlybird21hangarin.pythonanywhere.com/
+
+### Deployment Configuration
+
+- Python 3.13
+- Django 6.1
+- SQLite database
+- Static files served via `collectstatic`
+
+### PythonAnywhere Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Erlybird21/hangarin.git ~/hangarin
+```
+
+2. Create a virtual environment:
+```bash
+python3.13 -m venv ~/hangarin-venv
+source ~/hangarin-venv/bin/activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r ~/hangarin/requirements.txt
+```
+
+4. Run migrations:
+```bash
+cd ~/hangarin/hangarin_project
+python manage.py migrate
+```
+
+5. Collect static files:
+```bash
+python manage.py collectstatic --noinput
+```
+
+6. Configure the WSGI file:
+```python
+import os
+from django.core.wsgi import get_wsgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'hangarin_project.settings')
+application = get_wsgi_application()
+```
+
+7. Configure the web app in PythonAnywhere dashboard:
+- Python version: 3.13
+- Working directory: `/home/erlybird21hangarin/hangarin/hangarin_project`
+- WSGI file: `/home/erlybird21hangarin/hangarin/hangarin_project/hangarin_project/wsgi.py`
+- Virtual environment: `/home/erlybird21hangarin/hangarin-venv`
+
+8. Reload the web app.
+
 ## Current Development Status
 
-The project currently includes:
+The project includes:
 - Django project scaffold
 - Data models (BaseModel, Priority, Category, Task, SubTask, Note)
 - Admin configuration with list displays, search, and filters
 - Faker development data generation command
 - Dependency specification (requirements.txt)
 - Documentation
-
-Future work includes deployment to PythonAnywhere.
+- PythonAnywhere deployment
