@@ -148,3 +148,135 @@ class AccountTests(TestCase):
         self.assertEqual(
             app["secret"], os.environ.get("GOOGLE_OAUTH_SECRET", "")
         )
+
+
+class TaskCRUDTests(TestCase):
+    """Phase 3 milestone 1: Task CRUD with ownership enforcement."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.priority = Priority.objects.create(name="high")
+        cls.category = Category.objects.create(name="Work")
+
+    def make_task(self, user, title="Sample task"):
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status="Pending",
+            deadline=timezone.now(),
+            priority=self.priority,
+            category=self.category,
+        )
+
+    def task_form_data(self, **overrides):
+        data = {
+            "title": "Form task",
+            "description": "from form",
+            "status": "Pending",
+            "deadline": "2030-01-01 12:00",
+            "priority": self.priority.pk,
+            "category": self.category.pk,
+        }
+        data.update(overrides)
+        return data
+
+    def test_list_shows_only_own_tasks(self):
+        self.make_task(self.alice, title="Alice task")
+        self.make_task(self.bob, title="Bob task")
+        self.client.force_login(self.alice)
+        response = self.client.get(reverse("task_list"))
+        self.assertEqual(response.status_code, 200)
+        titles = [t.title for t in response.context["tasks"]]
+        self.assertIn("Alice task", titles)
+        self.assertNotIn("Bob task", titles)
+
+    def test_other_user_task_detail_404(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.bob)
+        response = self.client.get(reverse("task_detail", args=[task.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_other_user_task_update_404(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.bob)
+        url = reverse("task_update", args=[task.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)
+        response = self.client.post(url, self.task_form_data(title="Hijacked"))
+        self.assertEqual(response.status_code, 404)
+        task.refresh_from_db()
+        self.assertEqual(task.title, "Sample task")
+
+    def test_other_user_task_delete_404(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.bob)
+        url = reverse("task_delete", args=[task.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Task.objects.filter(pk=task.pk).exists())
+
+    def test_create_assigns_logged_in_user(self):
+        self.client.force_login(self.alice)
+        response = self.client.post(
+            reverse("task_create"), self.task_form_data()
+        )
+        self.assertEqual(response.status_code, 302)
+        task = Task.objects.get(title="Form task")
+        self.assertEqual(task.user, self.alice)
+
+    def test_form_excludes_user_field(self):
+        from .forms import TaskForm
+
+        self.assertNotIn("user", TaskForm.Meta.fields)
+        # A forged owner in POST data must be ignored.
+        self.client.force_login(self.bob)
+        response = self.client.post(
+            reverse("task_create"),
+            self.task_form_data(user=self.alice.pk),
+        )
+        self.assertEqual(response.status_code, 302)
+        task = Task.objects.get(title="Form task")
+        self.assertEqual(task.user, self.bob)
+
+    def test_owner_full_crud_cycle(self):
+        self.client.force_login(self.alice)
+        # Create
+        self.client.post(reverse("task_create"), self.task_form_data())
+        task = Task.objects.get(title="Form task")
+        # Detail
+        self.assertEqual(
+            self.client.get(reverse("task_detail", args=[task.pk])).status_code,
+            200,
+        )
+        # Update
+        response = self.client.post(
+            reverse("task_update", args=[task.pk]),
+            self.task_form_data(title="Renamed"),
+        )
+        self.assertEqual(response.status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual(task.title, "Renamed")
+        self.assertEqual(task.user, self.alice)
+        # Delete
+        response = self.client.post(reverse("task_delete", args=[task.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Task.objects.filter(pk=task.pk).exists())
+
+    def test_unauthenticated_users_redirected_to_login(self):
+        task = self.make_task(self.alice)
+        urls = [
+            reverse("task_list"),
+            reverse("task_create"),
+            reverse("task_detail", args=[task.pk]),
+            reverse("task_update", args=[task.pk]),
+            reverse("task_delete", args=[task.pk]),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/accounts/login/", response["Location"])

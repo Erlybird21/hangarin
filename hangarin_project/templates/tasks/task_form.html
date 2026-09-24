@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{% if task %}Edit Task{% else %}New Task{% endif %} - Hangarin{% endblock %}
+{% block content %}
+<h1>{% if task %}Edit Task{% else %}New Task{% endif %}</h1>
+<form method="post" action="">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+</form>
+<p><a href="{% if task %}{% url 'task_detail' task.pk %}{% else %}{% url 'task_list' %}{% endif %}">Cancel</a></p>
+{% endblock %}

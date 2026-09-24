@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }} - Hangarin{% endblock %}
+{% block content %}
+<h1>{{ task.title }}</h1>
+<p>{{ task.description }}</p>
+<p><strong>Status:</strong> {{ task.status }}</p>
+<p><strong>Category:</strong> {{ task.category.name }}</p>
+<p><strong>Priority:</strong> {{ task.priority.name }}</p>
+<p><strong>Deadline:</strong> {{ task.deadline|date:"M d, Y H:i" }}</p>
+<p>
+    <a href="{% url 'task_update' task.pk %}">Edit</a>
+    <a href="{% url 'task_delete' task.pk %}">Delete</a>
+    <a href="{% url 'task_list' %}">Back to list</a>
+</p>
+{% endblock %}
