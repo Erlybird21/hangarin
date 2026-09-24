@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Subtasks for {{ task.title }} - Hangarin{% endblock %}
+{% block content %}
+<h1>Subtasks for "{{ task.title }}"</h1>
+<p><a href="{% url 'subtask_create' task.pk %}">+ New Subtask</a></p>
+{% if subtasks %}
+<ul>
+    {% for subtask in subtasks %}
+    <li>
+        {{ subtask.title }} — {{ subtask.status }}
+        <a href="{% url 'subtask_update' task.pk subtask.pk %}">Edit</a>
+        <a href="{% url 'subtask_delete' task.pk subtask.pk %}">Delete</a>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No subtasks yet. <a href="{% url 'subtask_create' task.pk %}">Create one</a>.</p>
+{% endif %}
+<p><a href="{% url 'task_detail' task.pk %}">Back to task</a></p>
+{% endblock %}

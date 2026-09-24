@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{% if subtask %}Edit Subtask{% else %}New Subtask{% endif %} - Hangarin{% endblock %}
+{% block content %}
+<h1>{% if subtask %}Edit Subtask{% else %}New Subtask{% endif %} for "{{ task.title }}"</h1>
+<form method="post" action="">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+</form>
+<p><a href="{% url 'subtask_list' task.pk %}">Cancel</a></p>
+{% endblock %}

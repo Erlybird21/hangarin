@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Delete Note - Hangarin{% endblock %}
+{% block content %}
+<h1>Delete Note</h1>
+<p>Are you sure you want to delete this note?</p>
+<form method="post" action="">
+    {% csrf_token %}
+    <button type="submit">Yes, delete</button>
+</form>
+<p><a href="{% url 'note_list' task.pk %}">Cancel</a></p>
+{% endblock %}

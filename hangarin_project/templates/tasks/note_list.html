@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Notes for {{ task.title }} - Hangarin{% endblock %}
+{% block content %}
+<h1>Notes for "{{ task.title }}"</h1>
+<p><a href="{% url 'note_create' task.pk %}">+ New Note</a></p>
+{% if notes %}
+<ul>
+    {% for note in notes %}
+    <li>
+        {{ note.content|truncatewords:20 }}
+        <a href="{% url 'note_update' task.pk note.pk %}">Edit</a>
+        <a href="{% url 'note_delete' task.pk note.pk %}">Delete</a>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No notes yet. <a href="{% url 'note_create' task.pk %}">Create one</a>.</p>
+{% endif %}
+<p><a href="{% url 'task_detail' task.pk %}">Back to task</a></p>
+{% endblock %}

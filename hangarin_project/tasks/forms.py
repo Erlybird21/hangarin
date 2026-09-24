@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Task
+from .models import Note, SubTask, Task
 
 
 class TaskForm(forms.ModelForm):
@@ -23,4 +23,39 @@ class TaskForm(forms.ModelForm):
             "status": forms.Select(),
             "priority": forms.Select(),
             "category": forms.Select(),
+        }
+
+
+class SubTaskForm(forms.ModelForm):
+    """Form for creating/updating SubTasks.
+
+    The `task` (parent) field is deliberately excluded: the parent is always
+    taken from the URL's already-ownership-checked Task, so submitted form
+    data can never reparent the SubTask to another user's Task.
+    """
+
+    class Meta:
+        model = SubTask
+        fields = ["title", "status"]
+        widgets = {
+            "title": forms.TextInput(attrs={"placeholder": "Enter subtask title"}),
+            "status": forms.Select(),
+        }
+
+
+class NoteForm(forms.ModelForm):
+    """Form for creating/updating Notes.
+
+    The `task` (parent) field is deliberately excluded: the parent is always
+    taken from the URL's already-ownership-checked Task, so submitted form
+    data can never reparent the Note to another user's Task.
+    """
+
+    class Meta:
+        model = Note
+        fields = ["content"]
+        widgets = {
+            "content": forms.Textarea(
+                attrs={"placeholder": "Write your note...", "rows": 3}
+            ),
         }

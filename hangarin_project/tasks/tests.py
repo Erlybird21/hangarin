@@ -280,3 +280,257 @@ class TaskCRUDTests(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 302)
                 self.assertIn("/accounts/login/", response["Location"])
+
+
+class SubTaskCRUDTests(TestCase):
+    """Phase 3 milestone 3: SubTask CRUD, ownership via parent Task."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.priority = Priority.objects.create(name="high")
+        cls.category = Category.objects.create(name="Work")
+
+    def make_task(self, user, title="Sample task"):
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status="Pending",
+            deadline=timezone.now(),
+            priority=self.priority,
+            category=self.category,
+        )
+
+    def test_owner_can_list_create_update_delete(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.alice)
+        # List (empty)
+        response = self.client.get(reverse("subtask_list", args=[task.pk]))
+        self.assertEqual(response.status_code, 200)
+        # Create
+        response = self.client.post(
+            reverse("subtask_create", args=[task.pk]),
+            {"title": "Step 1", "status": "Pending"},
+        )
+        self.assertEqual(response.status_code, 302)
+        sub = SubTask.objects.get(title="Step 1")
+        self.assertEqual(sub.task, task)
+        # List shows it
+        response = self.client.get(reverse("subtask_list", args=[task.pk]))
+        self.assertContains(response, "Step 1")
+        # Update
+        response = self.client.post(
+            reverse("subtask_update", args=[task.pk, sub.pk]),
+            {"title": "Step 1 done", "status": "Completed"},
+        )
+        self.assertEqual(response.status_code, 302)
+        sub.refresh_from_db()
+        self.assertEqual(sub.title, "Step 1 done")
+        self.assertEqual(sub.task, task)
+        # Delete
+        response = self.client.post(
+            reverse("subtask_delete", args=[task.pk, sub.pk])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(SubTask.objects.filter(pk=sub.pk).exists())
+
+    def test_other_user_task_returns_404(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.bob)
+        for url in [
+            reverse("subtask_list", args=[task.pk]),
+            reverse("subtask_create", args=[task.pk]),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_other_user_subtask_returns_404(self):
+        alice_task = self.make_task(self.alice)
+        sub = SubTask.objects.create(
+            task=alice_task, title="Alice step", status="Pending"
+        )
+        bob_task = self.make_task(self.bob)
+        self.client.force_login(self.bob)
+        # Bob's own task + Alice's subtask ID -> 404 (child not under parent)
+        for url in [
+            reverse("subtask_update", args=[bob_task.pk, sub.pk]),
+            reverse("subtask_delete", args=[bob_task.pk, sub.pk]),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
+                self.assertEqual(
+                    self.client.post(
+                        url, {"title": "Hijacked", "status": "Completed"}
+                    ).status_code,
+                    404,
+                )
+        sub.refresh_from_db()
+        self.assertEqual(sub.title, "Alice step")
+        self.assertEqual(sub.task, alice_task)
+
+    def test_wrong_child_under_owned_task_returns_404(self):
+        task_a = self.make_task(self.alice, title="Task A")
+        task_b = self.make_task(self.alice, title="Task B")
+        sub = SubTask.objects.create(
+            task=task_a, title="Step A", status="Pending"
+        )
+        self.client.force_login(self.alice)
+        url = reverse("subtask_update", args=[task_b.pk, sub.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_forged_task_in_post_is_ignored(self):
+        from .forms import SubTaskForm
+
+        self.assertNotIn("task", SubTaskForm.Meta.fields)
+        alice_task = self.make_task(self.alice)
+        bob_task = self.make_task(self.bob)
+        self.client.force_login(self.alice)
+        response = self.client.post(
+            reverse("subtask_create", args=[alice_task.pk]),
+            {"title": "Forged", "status": "Pending", "task": bob_task.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        sub = SubTask.objects.get(title="Forged")
+        self.assertEqual(sub.task, alice_task)
+
+    def test_unauthenticated_users_redirected_to_login(self):
+        task = self.make_task(self.alice)
+        sub = SubTask.objects.create(
+            task=task, title="Step", status="Pending"
+        )
+        urls = [
+            reverse("subtask_list", args=[task.pk]),
+            reverse("subtask_create", args=[task.pk]),
+            reverse("subtask_update", args=[task.pk, sub.pk]),
+            reverse("subtask_delete", args=[task.pk, sub.pk]),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/accounts/login/", response["Location"])
+
+
+class NoteCRUDTests(TestCase):
+    """Phase 3 milestone 3: Note CRUD, ownership via parent Task."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.priority = Priority.objects.create(name="high")
+        cls.category = Category.objects.create(name="Work")
+
+    def make_task(self, user, title="Sample task"):
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status="Pending",
+            deadline=timezone.now(),
+            priority=self.priority,
+            category=self.category,
+        )
+
+    def test_owner_can_list_create_update_delete(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.alice)
+        response = self.client.get(reverse("note_list", args=[task.pk]))
+        self.assertEqual(response.status_code, 200)
+        # Create
+        response = self.client.post(
+            reverse("note_create", args=[task.pk]),
+            {"content": "Remember this"},
+        )
+        self.assertEqual(response.status_code, 302)
+        note = Note.objects.get(content="Remember this")
+        self.assertEqual(note.task, task)
+        # List shows it
+        response = self.client.get(reverse("note_list", args=[task.pk]))
+        self.assertContains(response, "Remember this")
+        # Update
+        response = self.client.post(
+            reverse("note_update", args=[task.pk, note.pk]),
+            {"content": "Updated reminder"},
+        )
+        self.assertEqual(response.status_code, 302)
+        note.refresh_from_db()
+        self.assertEqual(note.content, "Updated reminder")
+        self.assertEqual(note.task, task)
+        # Delete
+        response = self.client.post(
+            reverse("note_delete", args=[task.pk, note.pk])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Note.objects.filter(pk=note.pk).exists())
+
+    def test_other_user_task_returns_404(self):
+        task = self.make_task(self.alice)
+        self.client.force_login(self.bob)
+        for url in [
+            reverse("note_list", args=[task.pk]),
+            reverse("note_create", args=[task.pk]),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_other_user_note_returns_404(self):
+        alice_task = self.make_task(self.alice)
+        note = Note.objects.create(task=alice_task, content="Alice secret")
+        bob_task = self.make_task(self.bob)
+        self.client.force_login(self.bob)
+        for url in [
+            reverse("note_update", args=[bob_task.pk, note.pk]),
+            reverse("note_delete", args=[bob_task.pk, note.pk]),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
+                self.assertEqual(
+                    self.client.post(url, {"content": "Hijacked"}).status_code,
+                    404,
+                )
+        note.refresh_from_db()
+        self.assertEqual(note.content, "Alice secret")
+        self.assertEqual(note.task, alice_task)
+
+    def test_wrong_child_under_owned_task_returns_404(self):
+        task_a = self.make_task(self.alice, title="Task A")
+        task_b = self.make_task(self.alice, title="Task B")
+        note = Note.objects.create(task=task_a, content="Note A")
+        self.client.force_login(self.alice)
+        url = reverse("note_update", args=[task_b.pk, note.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_forged_task_in_post_is_ignored(self):
+        from .forms import NoteForm
+
+        self.assertNotIn("task", NoteForm.Meta.fields)
+        alice_task = self.make_task(self.alice)
+        bob_task = self.make_task(self.bob)
+        self.client.force_login(self.alice)
+        response = self.client.post(
+            reverse("note_create", args=[alice_task.pk]),
+            {"content": "Forged note", "task": bob_task.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        note = Note.objects.get(content="Forged note")
+        self.assertEqual(note.task, alice_task)
+
+    def test_unauthenticated_users_redirected_to_login(self):
+        task = self.make_task(self.alice)
+        note = Note.objects.create(task=task, content="Note")
+        urls = [
+            reverse("note_list", args=[task.pk]),
+            reverse("note_create", args=[task.pk]),
+            reverse("note_update", args=[task.pk, note.pk]),
+            reverse("note_delete", args=[task.pk, note.pk]),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/accounts/login/", response["Location"])
