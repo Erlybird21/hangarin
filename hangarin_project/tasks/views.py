@@ -1,8 +1,46 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from .forms import NoteForm, SubTaskForm, TaskForm
 from .models import Note, SubTask, Task
+
+
+@login_required
+def dashboard(request):
+    """Authenticated overview of the current user's own Tasks.
+
+    Every metric is scoped to ``request.user``: Tasks via
+    ``Task.objects.filter(user=request.user)`` and SubTasks via
+    ``SubTask.objects.filter(task__user=request.user)``. Category and
+    Priority are global objects, so their counts are derived by
+    aggregating the user's Tasks — never by counting global usage.
+    """
+    tasks = Task.objects.filter(user=request.user)
+    context = {
+        "total_tasks": tasks.count(),
+        "completed_tasks": tasks.filter(status="Completed").count(),
+        "pending_tasks": tasks.filter(status="Pending").count(),
+        "in_progress_tasks": tasks.filter(status="In Progress").count(),
+        "overdue_tasks": tasks.filter(deadline__lt=timezone.now())
+        .exclude(status="Completed")
+        .count(),
+        "tasks_by_priority": tasks.values("priority__name").annotate(
+            count=Count("priority")
+        ),
+        "tasks_by_category": tasks.values("category__name").annotate(
+            count=Count("category")
+        ),
+        "incomplete_subtasks": SubTask.objects.filter(
+            task__user=request.user, status__in=["Pending", "In Progress"]
+        ).count(),
+        "completed_subtasks": SubTask.objects.filter(
+            task__user=request.user, status="Completed"
+        ).count(),
+        "recent_tasks": tasks.order_by("-created_at")[:5],
+    }
+    return render(request, "tasks/dashboard.html", context)
 
 
 def _owned_task_or_404(request, pk):

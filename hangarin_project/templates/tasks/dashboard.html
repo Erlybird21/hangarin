@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Hangarin{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<p>Welcome, {{ request.user.username }}</p>
+
+<h2>Task Statistics</h2>
+<ul>
+    <li>Total: {{ total_tasks }}</li>
+    <li>Completed: {{ completed_tasks }}</li>
+    <li>Pending: {{ pending_tasks }}</li>
+    <li>In Progress: {{ in_progress_tasks }}</li>
+    <li>Overdue: {{ overdue_tasks }}</li>
+</ul>
+
+<h2>Tasks by Priority</h2>
+{% if tasks_by_priority %}
+<ul>
+    {% for entry in tasks_by_priority %}
+    <li>{{ entry.priority__name }}: {{ entry.count }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No tasks yet.</p>
+{% endif %}
+
+<h2>Tasks by Category</h2>
+{% if tasks_by_category %}
+<ul>
+    {% for entry in tasks_by_category %}
+    <li>{{ entry.category__name }}: {{ entry.count }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No tasks yet.</p>
+{% endif %}
+
+<h2>SubTasks</h2>
+<ul>
+    <li>Incomplete: {{ incomplete_subtasks }}</li>
+    <li>Completed: {{ completed_subtasks }}</li>
+</ul>
+
+<h2>Recent Tasks</h2>
+{% if recent_tasks %}
+<ul>
+    {% for task in recent_tasks %}
+    <li>
+        <a href="{% url 'task_detail' task.pk %}">{{ task.title }}</a>
+        — {{ task.status }}
+        — due {{ task.deadline|date:"M d, Y H:i" }}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No tasks yet. <a href="{% url 'task_create' %}">Create one</a>.</p>
+{% endif %}
+
+<p>
+    <a href="{% url 'task_create' %}">Create New Task</a>
+    <a href="{% url 'task_list' %}">View All Tasks</a>
+</p>
+{% endblock %}

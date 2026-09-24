@@ -5,6 +5,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from datetime import timedelta
+
 from .models import Category, Note, Priority, SubTask, Task
 
 
@@ -534,3 +536,181 @@ class NoteCRUDTests(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 302)
                 self.assertIn("/accounts/login/", response["Location"])
+
+
+class DashboardTests(TestCase):
+    """Phase 4: dashboard metrics, scoped to the current user."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.high = Priority.objects.create(name="high")
+        cls.low = Priority.objects.create(name="low")
+        cls.work = Category.objects.create(name="Work")
+        cls.personal = Category.objects.create(name="Personal")
+
+    def make_task(
+        self,
+        user,
+        title="Sample task",
+        status="Pending",
+        deadline=None,
+        priority=None,
+        category=None,
+    ):
+        if deadline is None:
+            deadline = timezone.now() + timedelta(days=1)
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status=status,
+            deadline=deadline,
+            priority=priority or self.high,
+            category=category or self.work,
+        )
+
+    def test_anonymous_redirected_to_login(self):
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_authenticated_user_can_access(self):
+        self.client.force_login(self.alice)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_own_task_statistics(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Done", status="Completed")
+        self.make_task(self.alice, title="Todo", status="Pending")
+        self.make_task(self.alice, title="Doing", status="In Progress")
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.context["total_tasks"], 3)
+        self.assertEqual(response.context["completed_tasks"], 1)
+        self.assertEqual(response.context["pending_tasks"], 1)
+        self.assertEqual(response.context["in_progress_tasks"], 1)
+
+    def test_cross_user_isolation(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="A1", status="Completed")
+        self.make_task(self.alice, title="A2", status="Pending")
+        for i in range(20):
+            self.make_task(
+                self.bob, title=f"Bob task {i}", status="Completed"
+            )
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.context["total_tasks"], 2)
+        self.assertEqual(response.context["completed_tasks"], 1)
+        self.assertEqual(response.context["pending_tasks"], 1)
+        titles = [t.title for t in response.context["recent_tasks"]]
+        self.assertNotIn("Bob task 0", titles)
+
+    def test_overdue_logic(self):
+        self.client.force_login(self.alice)
+        past = timezone.now() - timedelta(days=1)
+        future = timezone.now() + timedelta(days=1)
+        self.make_task(
+            self.alice,
+            title="Overdue pending",
+            status="Pending",
+            deadline=past,
+        )
+        self.make_task(
+            self.alice,
+            title="Overdue in progress",
+            status="In Progress",
+            deadline=past,
+        )
+        self.make_task(
+            self.alice,
+            title="Overdue but completed",
+            status="Completed",
+            deadline=past,
+        )
+        self.make_task(
+            self.alice, title="Future", status="Pending", deadline=future
+        )
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.context["overdue_tasks"], 2)
+
+    def test_priority_aggregation_is_user_scoped(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="A high 1", priority=self.high)
+        self.make_task(self.alice, title="A high 2", priority=self.high)
+        self.make_task(self.alice, title="A low 1", priority=self.low)
+        self.make_task(self.bob, title="B high", priority=self.high)
+        self.make_task(self.bob, title="B low", priority=self.low)
+        response = self.client.get(reverse("dashboard"))
+        counts = {
+            entry["priority__name"]: entry["count"]
+            for entry in response.context["tasks_by_priority"]
+        }
+        self.assertEqual(counts, {"high": 2, "low": 1})
+
+    def test_category_aggregation_is_user_scoped(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="A work 1", category=self.work)
+        self.make_task(
+            self.alice, title="A personal 1", category=self.personal
+        )
+        self.make_task(self.bob, title="B work", category=self.work)
+        response = self.client.get(reverse("dashboard"))
+        counts = {
+            entry["category__name"]: entry["count"]
+            for entry in response.context["tasks_by_category"]
+        }
+        self.assertEqual(counts, {"Work": 1, "Personal": 1})
+
+    def test_subtask_statistics_are_user_scoped(self):
+        self.client.force_login(self.alice)
+        alice_task = self.make_task(self.alice)
+        bob_task = self.make_task(self.bob)
+        SubTask.objects.create(
+            task=alice_task, title="A pending", status="Pending"
+        )
+        SubTask.objects.create(
+            task=alice_task, title="A in progress", status="In Progress"
+        )
+        SubTask.objects.create(
+            task=alice_task, title="A done", status="Completed"
+        )
+        SubTask.objects.create(
+            task=bob_task, title="B pending", status="Pending"
+        )
+        SubTask.objects.create(
+            task=bob_task, title="B done", status="Completed"
+        )
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.context["incomplete_subtasks"], 2)
+        self.assertEqual(response.context["completed_subtasks"], 1)
+
+    def test_recent_tasks_limited_to_five_and_owned(self):
+        self.client.force_login(self.alice)
+        for i in range(7):
+            self.make_task(self.alice, title=f"Alice task {i}")
+        self.make_task(self.bob, title="Bob newest")
+        response = self.client.get(reverse("dashboard"))
+        recent = list(response.context["recent_tasks"])
+        self.assertEqual(len(recent), 5)
+        self.assertTrue(all(t.user == self.alice for t in recent))
+        self.assertEqual(recent[0].title, "Alice task 6")
+        self.assertEqual(recent[4].title, "Alice task 2")
+        self.assertNotIn("Bob newest", [t.title for t in recent])
+
+    def test_empty_dashboard(self):
+        self.client.force_login(self.alice)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_tasks"], 0)
+        self.assertEqual(response.context["completed_tasks"], 0)
+        self.assertEqual(response.context["pending_tasks"], 0)
+        self.assertEqual(response.context["in_progress_tasks"], 0)
+        self.assertEqual(response.context["overdue_tasks"], 0)
+        self.assertEqual(response.context["incomplete_subtasks"], 0)
+        self.assertEqual(response.context["completed_subtasks"], 0)
+        self.assertEqual(list(response.context["tasks_by_priority"]), [])
+        self.assertEqual(list(response.context["tasks_by_category"]), [])
+        self.assertEqual(list(response.context["recent_tasks"]), [])
