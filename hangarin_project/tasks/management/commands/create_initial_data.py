@@ -1,7 +1,13 @@
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from faker import Faker
 from tasks.models import Priority, Category, Task, SubTask, Note
+
+# Username reserved for locally generated development data. It is created
+# with an unusable password so it can never be used to log in, and its name
+# makes it obvious it must not be treated as real production data.
+DEV_USERNAME = "dev_seed_user"
 
 
 class Command(BaseCommand):
@@ -10,9 +16,25 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.create_priorities()
         self.create_categories()
-        self.create_tasks(30)
+        owner = self.get_dev_user()
+        if Task.objects.exists():
+            self.stdout.write('Tasks already exist, skipping task seeding.')
+            return
+        self.create_tasks(owner, 30)
         self.create_subtasks()
         self.create_notes()
+
+    def get_dev_user(self):
+        user, created = get_user_model().objects.get_or_create(
+            username=DEV_USERNAME,
+            defaults={"email": "dev_seed_user@example.local", "is_staff": False},
+        )
+        if created:
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
+            self.stdout.write(self.style.SUCCESS(
+                f'Development user "{DEV_USERNAME}" created (login disabled).'))
+        return user
 
     def create_priorities(self):
         priorities = ['high', 'medium', 'low', 'critical', 'optional']
@@ -28,12 +50,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             'Categories created successfully.'))
 
-    def create_tasks(self, count):
+    def create_tasks(self, owner, count):
         fake = Faker()
-        statuses = ['Pending', 'In Progress ', 'Completed']
+        statuses = ['Pending', 'In Progress', 'Completed']
 
         for _ in range(count):
             Task.objects.create(
+                user=owner,
                 title=fake.sentence(),
                 description=fake.paragraph(),
                 status=fake.random_element(statuses),
@@ -46,7 +69,7 @@ class Command(BaseCommand):
 
     def create_subtasks(self):
         fake = Faker()
-        statuses = ['Pending', 'In Progress ', 'Completed']
+        statuses = ['Pending', 'In Progress', 'Completed']
 
         for task in Task.objects.all():
             for _ in range(fake.random_int(min=1, max=5)):

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -10,7 +11,7 @@ class BaseModel(models.Model):
 
 
 class Priority(BaseModel):
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, unique=True)
 
     class Meta:
         verbose_name_plural = "Priorities"
@@ -20,7 +21,7 @@ class Priority(BaseModel):
 
 
 class Category(BaseModel):
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, unique=True)
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -30,11 +31,16 @@ class Category(BaseModel):
 
 
 class Task(BaseModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tasks",
+    )
     title = models.CharField(max_length=250)
     description = models.TextField()
     status = models.CharField(max_length=20, choices=[
         ("Pending", "Pending"),
-        ("In Progress ", "In Progress"),
+        ("In Progress", "In Progress"),
         ("Completed", "Completed"),
     ])
     deadline = models.DateTimeField()
@@ -50,7 +56,7 @@ class SubTask(BaseModel):
     title = models.CharField(max_length=250)
     status = models.CharField(max_length=20, choices=[
         ("Pending", "Pending"),
-        ("In Progress ", "In Progress"),
+        ("In Progress", "In Progress"),
         ("Completed", "Completed"),
     ])
 
