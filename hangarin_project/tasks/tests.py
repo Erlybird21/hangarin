@@ -1094,3 +1094,84 @@ class TaskKanbanTests(TestCase):
         self.assertContains(
             response, reverse("task_detail", args=[task.pk])
         )
+
+
+class PWATests(TestCase):
+    """Phase 7: manifest, service worker, offline fallback, static assets.
+
+    The service worker itself runs in the browser, which Django unit
+    tests cannot simulate; these tests verify the Django endpoints that
+    feed it (URLs, content types, payloads) plus the static assets.
+    """
+
+    def test_manifest_responds_with_json(self):
+        response = self.client.get(reverse("manifest"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/manifest+json", response["Content-Type"])
+        manifest = response.json()
+        self.assertEqual(manifest["name"], "Hangarin")
+        self.assertEqual(manifest["short_name"], "Hangarin")
+        self.assertEqual(manifest["start_url"], "/tasks/")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(manifest["theme_color"], "#1E40AF")
+        self.assertEqual(manifest["background_color"], "#F8FAFC")
+
+    def test_manifest_icons_cover_192_and_512(self):
+        manifest = self.client.get(reverse("manifest")).json()
+        sizes = {icon["sizes"] for icon in manifest["icons"]}
+        self.assertIn("192x192", sizes)
+        self.assertIn("512x512", sizes)
+        for icon in manifest["icons"]:
+            self.assertEqual(icon["type"], "image/png")
+
+    def test_service_worker_responds_with_javascript(self):
+        response = self.client.get(reverse("service_worker"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/javascript", response["Content-Type"])
+        js = response.content.decode()
+        self.assertIn("hangarin-v1", js)
+        self.assertIn("addEventListener('install'", js)
+        self.assertIn("addEventListener('activate'", js)
+        self.assertIn("addEventListener('fetch'", js)
+        self.assertIn("/offline/", js)
+
+    def test_service_worker_accessible_without_authentication(self):
+        for name in ("manifest", "service_worker", "offline"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    self.client.get(reverse(name)).status_code, 200
+                )
+
+    def test_service_worker_never_caches_private_routes(self):
+        js = self.client.get(reverse("service_worker")).content.decode()
+        for private_path in ("/tasks/", "/accounts/", "/admin/"):
+            self.assertNotIn(f"'{private_path}'", js)
+            self.assertNotIn(f'"{private_path}"', js)
+
+    def test_offline_page_has_hangarin_branding(self):
+        response = self.client.get(reverse("offline"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Hangarin")
+        self.assertContains(response, "offline")
+
+    def test_pwa_static_assets_are_discoverable(self):
+        from django.contrib.staticfiles.finders import find
+
+        for path in (
+            "icons/icon-192.png",
+            "icons/icon-512.png",
+            "css/hangarin.css",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(find(path), path)
+
+    def test_base_template_links_manifest_and_registers_worker(self):
+        self.client.force_login(
+            get_user_model().objects.create_user(
+                username="pwa_user", password="x"
+            )
+        )
+        response = self.client.get(reverse("task_list"))
+        self.assertContains(response, reverse("manifest"))
+        self.assertContains(response, reverse("service_worker"))
+        self.assertContains(response, 'name="theme-color"')

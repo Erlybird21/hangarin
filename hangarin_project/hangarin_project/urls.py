@@ -17,8 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from . import views as site_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('tasks/', include('tasks.urls')),
+    path('manifest.json', site_views.manifest, name='manifest'),
+    path('service-worker.js', site_views.service_worker, name='service_worker'),
+    path('offline/', site_views.offline, name='offline'),
 ]

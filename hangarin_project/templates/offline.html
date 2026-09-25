@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Offline - Hangarin{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+    <div class="auth-card">
+        <h1>You are offline</h1>
+        <p>Hangarin needs a connection to show your tasks. Anything you could see here lives on the server, so tasks cannot be viewed or edited while offline.</p>
+        <p>Reconnect, then <a href="{% url 'task_list' %}">return to your tasks</a>.</p>
+    </div>
+</div>
+{% endblock %}
