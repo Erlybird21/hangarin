@@ -1322,3 +1322,63 @@ class ProductionConfigTests(TestCase):
         self.assertNotIn("tzdata", content)
         for line in content.splitlines():
             self.assertTrue(line.strip(), "no blank lines")
+
+
+class RootRouteTests(TestCase):
+    """Root route (/) reuses the existing task_list view."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.priority = Priority.objects.create(name="high")
+        cls.category = Category.objects.create(name="Work")
+
+    def make_task(self, user, title="Sample task"):
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status="Pending",
+            deadline=timezone.now() + timedelta(days=1),
+            priority=self.priority,
+            category=self.category,
+        )
+
+    def test_logged_out_root_redirects_to_login(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_logged_in_root_returns_task_list(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Alice root task")
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "Alice root task", [t.title for t in response.context["tasks"]]
+        )
+
+    def test_root_does_not_expose_other_user_tasks(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Alice task")
+        self.make_task(self.bob, title="Bob task")
+        titles = [
+            t.title for t in self.client.get("/").context["tasks"]
+        ]
+        self.assertIn("Alice task", titles)
+        self.assertNotIn("Bob task", titles)
+
+    def test_tasks_route_still_works(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Alice list task")
+        response = self.client.get(reverse("task_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "Alice list task",
+            [t.title for t in response.context["tasks"]],
+        )
+
+    def test_login_redirect_url_remains_root(self):
+        self.assertEqual(settings.LOGIN_REDIRECT_URL, "/")

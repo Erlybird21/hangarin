@@ -18,8 +18,12 @@ from django.contrib import admin
 from django.urls import include, path
 
 from . import views as site_views
+from tasks import views as task_views
 
 urlpatterns = [
+    # Root route reuses the existing task_list view (no name: the
+    # canonical `task_list` reverse target remains /tasks/).
+    path("", task_views.task_list),
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('tasks/', include('tasks.urls')),
