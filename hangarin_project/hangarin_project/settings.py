@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.github',
     "tasks",
 ]
 
@@ -115,6 +116,13 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
 # variables (local .env, which is gitignored, or production env config).
 # With empty values the provider structure loads correctly but the Google
 # flow cannot complete until real credentials are supplied.
+#
+# GitHub OAuth follows the same pattern: credentials come only from the
+# GITHUB_OAUTH_CLIENT_ID / GITHUB_OAUTH_SECRET environment variables.
+# Register a GitHub OAuth App with the callback URL
+# https://<host>/accounts/github/callback/ (locally:
+# http://127.0.0.1:8000/accounts/github/callback/) and configure the values
+# outside Git (production: PythonAnywhere env config).
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
@@ -124,6 +132,14 @@ SOCIALACCOUNT_PROVIDERS = {
         },
         "SCOPE": ["profile", "email"],
         "AUTH_PARAMS": {"access_type": "online"},
+    },
+    "github": {
+        "APP": {
+            "client_id": os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
+            "secret": os.environ.get("GITHUB_OAUTH_SECRET", ""),
+            "key": "",
+        },
+        "SCOPE": ["profile", "email"],
     }
 }
 

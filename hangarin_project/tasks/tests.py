@@ -155,6 +155,76 @@ class AccountTests(TestCase):
         )
 
 
+class LoginPageTests(TestCase):
+    """Login page layout: social buttons, Remember Me, no duplicate links.
+
+    GitHub is configuration-only here (no real credentials, no external
+    requests); these tests verify the provider is registered, its login
+    URL resolves, and the button links to the real allauth route.
+    """
+
+    def test_login_page_loads_for_logged_out_users(self):
+        response = self.client.get(reverse("account_login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "account/login.html")
+
+    def test_google_social_login_button_exists(self):
+        response = self.client.get(reverse("account_login"))
+        self.assertContains(response, "Continue with Google")
+        self.assertContains(response, reverse("google_login"))
+
+    def test_github_login_url_resolves_through_allauth(self):
+        self.assertTrue(reverse("github_login"))
+
+    def test_github_social_login_button_links_to_allauth_route(self):
+        response = self.client.get(reverse("account_login"))
+        self.assertContains(response, "Continue with GitHub")
+        self.assertContains(response, reverse("github_login"))
+
+    def test_remember_me_uses_actual_allauth_field(self):
+        response = self.client.get(reverse("account_login"))
+        # Bound allauth field: same name/id allauth posts back as.
+        self.assertContains(response, 'name="remember"')
+        self.assertContains(response, 'id="id_remember"')
+        self.assertContains(response, "Remember Me")
+        # Checkbox and label grouped in one aligned control.
+        self.assertContains(response, "remember-me")
+
+    def test_login_button_exists(self):
+        response = self.client.get(reverse("account_login"))
+        self.assertContains(response, 'type="submit"')
+        self.assertContains(response, ">Login</button>")
+
+    def test_username_and_password_fields_present(self):
+        response = self.client.get(reverse("account_login"))
+        self.assertContains(response, 'name="login"')
+        self.assertContains(response, 'name="password"')
+
+    def test_password_reset_link_not_duplicated(self):
+        response = self.client.get(reverse("account_login"))
+        content = response.content.decode()
+        self.assertEqual(
+            content.count(reverse("account_reset_password")),
+            1,
+            "password-reset link must appear exactly once",
+        )
+
+    def test_github_provider_configured_without_committed_secrets(self):
+        providers = settings.SOCIALACCOUNT_PROVIDERS
+        self.assertIn("github", providers)
+        app = providers["github"]["APP"]
+        # Credentials must come from the environment; defaults are empty so
+        # nothing secret can leak into the repository.
+        import os
+
+        self.assertEqual(
+            app["client_id"], os.environ.get("GITHUB_OAUTH_CLIENT_ID", "")
+        )
+        self.assertEqual(
+            app["secret"], os.environ.get("GITHUB_OAUTH_SECRET", "")
+        )
+
+
 class TaskCRUDTests(TestCase):
     """Phase 3 milestone 1: Task CRUD with ownership enforcement."""
 

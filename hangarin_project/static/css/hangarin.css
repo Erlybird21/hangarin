@@ -642,6 +642,7 @@ body {
     display: flex;
     gap: 0.75rem;
     align-items: center;
+    justify-content: center;
     margin-top: 1.25rem;
     flex-wrap: wrap;
 }
@@ -691,6 +692,47 @@ body {
 .google-btn:hover {
     border-color: var(--primary-light);
     color: var(--primary);
+}
+
+/* Side-by-side social-login buttons (Google + GitHub). They share the
+ * .google-btn base style; the wrapper controls the layout. On narrow
+ * screens the buttons stack instead of overflowing. */
+.social-login-buttons {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.social-login-buttons .google-btn {
+    flex: 1 1 0;
+    margin-bottom: 0;
+}
+
+@media (max-width: 30rem) {
+    .social-login-buttons {
+        flex-direction: column;
+    }
+}
+
+/* Remember Me: checkbox and label grouped as one aligned control. The
+ * bound allauth `remember` field is rendered explicitly in the template;
+ * this overrides the default stacked `.form-card p` grid for this row. */
+.form-card p.remember-me {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-card p.remember-me input[type="checkbox"] {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex: none;
+    accent-color: var(--primary);
+}
+
+.form-card p.remember-me label {
+    font-weight: 500;
+    cursor: pointer;
 }
 
 .auth-switch {

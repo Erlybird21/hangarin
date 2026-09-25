@@ -5,15 +5,33 @@
 <div class="auth-wrap">
     <div class="auth-card">
         <h1>Login</h1>
-        <a class="google-btn" href="{% provider_login_url 'google' %}">Continue with Google</a>
+        <div class="social-login-buttons">
+            <a class="google-btn" href="{% provider_login_url 'google' %}">Continue with Google</a>
+            <a class="google-btn" href="{% provider_login_url 'github' %}">Continue with GitHub</a>
+        </div>
         <form class="form-card" method="post" action="{% url 'account_login' %}">
             {% csrf_token %}
-            {{ form.as_p }}
+            {{ form.non_field_errors }}
+            <p>
+                {{ form.login.label_tag }}
+                {{ form.login }}
+                {{ form.login.errors }}
+            </p>
+            <p>
+                {{ form.password.label_tag }}
+                {{ form.password }}
+                {% if form.password.help_text %}<span class="helptext">{{ form.password.help_text }}</span>{% endif %}
+                {{ form.password.errors }}
+            </p>
+            <p class="remember-me">
+                {{ form.remember }}
+                {{ form.remember.label_tag }}
+                {{ form.remember.errors }}
+            </p>
             <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Login</button>
             </div>
         </form>
-        <p class="auth-switch"><a href="{% url 'account_reset_password' %}">Forgot password?</a></p>
         <p class="auth-switch">Don't have an account? <a href="{% url 'account_signup' %}">Sign up</a></p>
     </div>
 </div>
