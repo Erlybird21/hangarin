@@ -17,6 +17,36 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_bool(name, default=False):
+    """Parse a boolean environment variable robustly.
+
+    Accepts 1/true/yes/on (case-insensitive) as True; anything else,
+    including an unset variable, falls back to `default`. Plain string
+    comparison (e.g. `== "True"`) would treat "False" as truthy, which
+    must never enable DEBUG or weaken a security flag by accident.
+    """
+    return os.environ.get(name, str(default)).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _env_list(name, default=""):
+    """Parse a comma-separated environment variable into a list."""
+    raw = os.environ.get(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _env_int(name, default=0):
+    """Parse an integer environment variable, falling back to `default`."""
+    try:
+        return int(os.environ.get(name, str(default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -31,9 +61,21 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
+# Robust parsing: DJANGO_DEBUG=False/0 (not just unset) disables debug.
+DEBUG = _env_bool("DJANGO_DEBUG", default=True)
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "erlybird21hangarin.pythonanywhere.com"]
+# Production hosts are environment-configurable; local defaults keep
+# development working without extra setup. Never use ["*"] here.
+ALLOWED_HOSTS = _env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    "127.0.0.1,localhost,erlybird21hangarin.pythonanywhere.com",
+)
+
+# Origins trusted for CSRF checks (scheme + host, e.g.
+# "https://erlybird21hangarin.pythonanywhere.com"). Empty by default so
+# local HTTP development keeps working; production HTTPS deployments
+# must set this to the real deployment origin.
+CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 
 
 # Application definition
@@ -116,6 +158,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'hangarin_project.wsgi.application'
 
 
+# HTTPS / security hardening. Every redirect/cookie/HSTS behavior is
+# environment-controlled so local HTTP development keeps working while a
+# production HTTPS deployment can enable the full set. Do NOT enable
+# SECURE_SSL_REDIRECT or HSTS until the deployment actually serves HTTPS.
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
+SESSION_COOKIE_SECURE = _env_bool("DJANGO_SESSION_COOKIE_SECURE", default=False)
+CSRF_COOKIE_SECURE = _env_bool("DJANGO_CSRF_COOKIE_SECURE", default=False)
+SECURE_HSTS_SECONDS = _env_int("DJANGO_SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool(
+    "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False
+)
+SECURE_HSTS_PRELOAD = _env_bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+# X_FRAME_OPTIONS keeps Django's safe default (DENY) and is
+# intentionally not weakened here.
+
+
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
@@ -184,3 +244,13 @@ EMAIL_BACKEND = os.environ.get(
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DJANGO_DEFAULT_FROM_EMAIL", "hangarin@localhost"
 )
+# Production SMTP configuration (all optional in development; the console
+# backend above remains the default). Set DJANGO_EMAIL_BACKEND to
+# "django.core.mail.backends.smtp.EmailBackend" plus these values to send
+# real mail such as password resets. Never commit credentials.
+EMAIL_HOST = os.environ.get("DJANGO_EMAIL_HOST", "localhost")
+EMAIL_PORT = _env_int("DJANGO_EMAIL_PORT", default=25)
+EMAIL_HOST_USER = os.environ.get("DJANGO_EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("DJANGO_EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("DJANGO_EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = _env_bool("DJANGO_EMAIL_USE_SSL", default=False)

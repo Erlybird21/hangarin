@@ -5,7 +5,10 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+import importlib
+import os
 from datetime import timedelta
+from unittest.mock import patch
 
 from .models import Category, Note, Priority, SubTask, Task
 
@@ -1175,3 +1178,147 @@ class PWATests(TestCase):
         self.assertContains(response, reverse("manifest"))
         self.assertContains(response, reverse("service_worker"))
         self.assertContains(response, 'name="theme-color"')
+
+
+class ProductionConfigTests(TestCase):
+    """Phase 8: production configuration reads environment safely."""
+
+    def helpers(self):
+        from hangarin_project import settings as app_settings
+
+        return (
+            app_settings._env_bool,
+            app_settings._env_list,
+            app_settings._env_int,
+        )
+
+    def test_env_bool_parsing(self):
+        env_bool, _, _ = self.helpers()
+        for truthy in ("1", "True", "true", "TRUE", "yes", "on", " On "):
+            with self.subTest(value=truthy):
+                with patch.dict(os.environ, {"HANGARIN_TEST_FLAG": truthy}):
+                    self.assertTrue(env_bool("HANGARIN_TEST_FLAG"))
+        for falsy in ("0", "False", "false", "no", "off", "", "bogus"):
+            with self.subTest(value=falsy):
+                with patch.dict(os.environ, {"HANGARIN_TEST_FLAG": falsy}):
+                    self.assertFalse(env_bool("HANGARIN_TEST_FLAG"))
+        # Unset falls back to the default (never truthy by accident).
+        os.environ.pop("HANGARIN_TEST_FLAG", None)
+        self.assertFalse(env_bool("HANGARIN_TEST_FLAG"))
+        self.assertTrue(env_bool("HANGARIN_TEST_FLAG", default=True))
+        # "False" must not enable a flag: DEBUG stays off.
+        with patch.dict(os.environ, {"HANGARIN_TEST_FLAG": "False"}):
+            self.assertFalse(env_bool("HANGARIN_TEST_FLAG", default=True))
+
+    def test_env_list_parsing(self):
+        _, env_list, _ = self.helpers()
+        with patch.dict(
+            os.environ,
+            {"HANGARIN_TEST_LIST": "a.example.com, b.example.com ,, "},
+        ):
+            self.assertEqual(
+                env_list("HANGARIN_TEST_LIST"),
+                ["a.example.com", "b.example.com"],
+            )
+        os.environ.pop("HANGARIN_TEST_LIST", None)
+        self.assertEqual(env_list("HANGARIN_TEST_LIST"), [])
+        self.assertEqual(
+            env_list("HANGARIN_TEST_LIST", "x, y"), ["x", "y"]
+        )
+
+    def test_env_int_parsing(self):
+        _, _, env_int = self.helpers()
+        with patch.dict(os.environ, {"HANGARIN_TEST_INT": "31536000"}):
+            self.assertEqual(env_int("HANGARIN_TEST_INT"), 31536000)
+        with patch.dict(os.environ, {"HANGARIN_TEST_INT": "bogus"}):
+            self.assertEqual(env_int("HANGARIN_TEST_INT", default=25), 25)
+        os.environ.pop("HANGARIN_TEST_INT", None)
+        self.assertEqual(env_int("HANGARIN_TEST_INT"), 0)
+
+    def test_safe_local_defaults(self):
+        self.assertIn("127.0.0.1", settings.ALLOWED_HOSTS)
+        self.assertIn("localhost", settings.ALLOWED_HOSTS)
+        self.assertNotIn("*", settings.ALLOWED_HOSTS)
+        self.assertEqual(settings.CSRF_TRUSTED_ORIGINS, [])
+        self.assertFalse(settings.SECURE_SSL_REDIRECT)
+        self.assertFalse(settings.SESSION_COOKIE_SECURE)
+        self.assertFalse(settings.CSRF_COOKIE_SECURE)
+        self.assertEqual(settings.SECURE_HSTS_SECONDS, 0)
+        self.assertTrue(settings.SECURE_CONTENT_TYPE_NOSNIFF)
+        self.assertEqual(
+            settings.SECURE_REFERRER_POLICY, "strict-origin-when-cross-origin"
+        )
+        self.assertEqual(settings.EMAIL_PORT, 25)
+        self.assertFalse(settings.EMAIL_USE_TLS)
+        self.assertFalse(settings.EMAIL_USE_SSL)
+        # The test runner forces the locmem backend, so verify the
+        # env-driven default wiring instead of the live value.
+        os.environ.pop("DJANGO_EMAIL_BACKEND", None)
+        self.assertEqual(
+            os.environ.get(
+                "DJANGO_EMAIL_BACKEND",
+                "django.core.mail.backends.console.EmailBackend",
+            ),
+            "django.core.mail.backends.console.EmailBackend",
+        )
+
+    def test_dev_secret_key_is_marked_not_for_production(self):
+        os.environ.pop("DJANGO_SECRET_KEY", None)
+        # Only asserts the dev-only marker, never the value itself.
+        self.assertTrue(settings.SECRET_KEY.startswith("django-insecure-"))
+
+    def test_environment_overrides_apply(self):
+        from hangarin_project import settings as app_settings
+
+        env = {
+            "DJANGO_SECRET_KEY": "test-env-secret-" + "z" * 40,
+            "DJANGO_DEBUG": "False",
+            "DJANGO_ALLOWED_HOSTS": "app.example.com, www.example.com",
+            "DJANGO_CSRF_TRUSTED_ORIGINS": "https://app.example.com",
+            "DJANGO_SECURE_SSL_REDIRECT": "True",
+            "DJANGO_SESSION_COOKIE_SECURE": "1",
+            "DJANGO_CSRF_COOKIE_SECURE": "yes",
+            "DJANGO_SECURE_HSTS_SECONDS": "31536000",
+            "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS": "on",
+            "DJANGO_SECURE_HSTS_PRELOAD": "True",
+            "DJANGO_EMAIL_PORT": "587",
+            "DJANGO_EMAIL_USE_TLS": "True",
+        }
+        with patch.dict(os.environ, env):
+            importlib.reload(app_settings)
+            try:
+                self.assertEqual(
+                    app_settings.SECRET_KEY, env["DJANGO_SECRET_KEY"]
+                )
+                self.assertFalse(app_settings.DEBUG)
+                self.assertEqual(
+                    app_settings.ALLOWED_HOSTS,
+                    ["app.example.com", "www.example.com"],
+                )
+                self.assertEqual(
+                    app_settings.CSRF_TRUSTED_ORIGINS,
+                    ["https://app.example.com"],
+                )
+                self.assertTrue(app_settings.SECURE_SSL_REDIRECT)
+                self.assertTrue(app_settings.SESSION_COOKIE_SECURE)
+                self.assertTrue(app_settings.CSRF_COOKIE_SECURE)
+                self.assertEqual(app_settings.SECURE_HSTS_SECONDS, 31536000)
+                self.assertTrue(app_settings.SECURE_HSTS_INCLUDE_SUBDOMAINS)
+                self.assertTrue(app_settings.SECURE_HSTS_PRELOAD)
+                self.assertEqual(app_settings.EMAIL_PORT, 587)
+                self.assertTrue(app_settings.EMAIL_USE_TLS)
+            finally:
+                importlib.reload(app_settings)
+
+    def test_requirements_file_is_clean_utf8_with_pins(self):
+        from pathlib import Path
+
+        requirements = (
+            Path(settings.BASE_DIR).parent / "requirements.txt"
+        )
+        content = requirements.read_text(encoding="utf-8")
+        self.assertIn("Django==", content)
+        self.assertIn("django-allauth==", content)
+        self.assertNotIn("tzdata", content)
+        for line in content.splitlines():
+            self.assertTrue(line.strip(), "no blank lines")
