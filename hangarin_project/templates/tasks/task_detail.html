@@ -1,19 +1,42 @@
 {% extends "base.html" %}
 {% block title %}{{ task.title }} - Hangarin{% endblock %}
 {% block content %}
-<h1>{{ task.title }}</h1>
-<p>{{ task.description }}</p>
-<p><strong>Status:</strong> {{ task.status }}</p>
-<p><strong>Category:</strong> {{ task.category.name }}</p>
-<p><strong>Priority:</strong> {{ task.priority.name }}</p>
-<p><strong>Deadline:</strong> {{ task.deadline|date:"M d, Y H:i" }}</p>
-<p>
-    <a href="{% url 'task_update' task.pk %}">Edit</a>
-    <a href="{% url 'task_delete' task.pk %}">Delete</a>
-    <a href="{% url 'task_list' %}">Back to list</a>
-</p>
-<p>
-    <a href="{% url 'subtask_list' task.pk %}">Subtasks</a>
-    <a href="{% url 'note_list' task.pk %}">Notes</a>
-</p>
+<div class="detail-head">
+    <h1>{{ task.title }}</h1>
+    <div class="detail-meta">
+        {% if task.status == "Pending" %}
+        <span class="badge badge-pending"><span class="dot" aria-hidden="true"></span>Pending</span>
+        {% elif task.status == "In Progress" %}
+        <span class="badge badge-in-progress"><span class="dot" aria-hidden="true"></span>In Progress</span>
+        {% else %}
+        <span class="badge badge-completed"><span class="dot" aria-hidden="true"></span>Completed</span>
+        {% endif %}
+        <span class="tag">{{ task.priority.name }}</span>
+        <span class="tag">{{ task.category.name }}</span>
+    </div>
+</div>
+
+<div class="description">{{ task.description }}</div>
+
+<p class="timestamps">Deadline {{ task.deadline|date:"M d, Y H:i" }} &middot; Updated {{ task.updated_at|date:"M d, Y H:i" }}</p>
+
+<div class="task-actions">
+    <a class="btn btn-secondary" href="{% url 'task_update' task.pk %}">Edit</a>
+    <a class="btn btn-secondary" href="{% url 'task_delete' task.pk %}">Delete</a>
+    <a class="btn btn-secondary" href="{% url 'task_list' %}">Back to list</a>
+</div>
+
+<section class="section" aria-label="Subtasks">
+    <div class="subsection-head">
+        <h2>SubTasks</h2>
+        <a class="btn btn-small btn-secondary" href="{% url 'subtask_list' task.pk %}">Manage Subtasks</a>
+    </div>
+</section>
+
+<section class="section" aria-label="Notes">
+    <div class="subsection-head">
+        <h2>Notes</h2>
+        <a class="btn btn-small btn-secondary" href="{% url 'note_list' task.pk %}">Manage Notes</a>
+    </div>
+</section>
 {% endblock %}

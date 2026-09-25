@@ -2,10 +2,12 @@
 {% block title %}{% if task %}Edit Task{% else %}New Task{% endif %} - Hangarin{% endblock %}
 {% block content %}
 <h1>{% if task %}Edit Task{% else %}New Task{% endif %}</h1>
-<form method="post" action="">
+<form class="form-card" method="post" action="">
     {% csrf_token %}
     {{ form.as_p }}
-    <button type="submit">Save</button>
+    <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <a class="btn btn-secondary" href="{% if task %}{% url 'task_detail' task.pk %}{% else %}{% url 'task_list' %}{% endif %}">Cancel</a>
+    </div>
 </form>
-<p><a href="{% if task %}{% url 'task_detail' task.pk %}{% else %}{% url 'task_list' %}{% endif %}">Cancel</a></p>
 {% endblock %}

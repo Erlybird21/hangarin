@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Task Board - Hangarin{% endblock %}
+{% block content %}
+<div class="page-head">
+    <h1>Tasks</h1>
+    <a class="btn btn-primary" href="{% url 'task_create' %}">+ New Task</a>
+</div>
+<nav class="view-switch" aria-label="Task views">
+    <a href="{% url 'task_list' %}">List</a>
+    <a href="{% url 'task_kanban' %}" aria-current="page">Kanban</a>
+</nav>
+<div class="kanban-board">
+    {% for status, board_tasks in columns %}
+    <section class="kanban-column" data-status="{{ status }}" aria-label="{{ status }}">
+        <h2>{{ status }}<span class="count">{{ board_tasks|length }}</span></h2>
+        {% if board_tasks %}
+        {% for task in board_tasks %}
+        <article class="kanban-card">
+            <h3><a href="{% url 'task_detail' task.pk %}">{{ task.title }}</a></h3>
+            <div class="task-meta">
+                <span class="tag">{{ task.priority.name }}</span>
+                <span class="tag">{{ task.category.name }}</span>
+            </div>
+            <div class="task-meta">
+                <span>Due {{ task.deadline|date:"M d, Y H:i" }}</span>
+                {% if task.subtask_total %}
+                <span>{{ task.subtask_done }}/{{ task.subtask_total }} subtasks done</span>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+        {% else %}
+        <p class="empty-column">No {{ status|lower }} tasks.</p>
+        {% endif %}
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

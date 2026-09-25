@@ -1,5 +1,5 @@
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -114,7 +114,12 @@ def task_list(request):
         deadline_filter = "all"
 
     sort = request.GET.get("sort", "newest")
-    tasks = tasks.order_by(SORT_ORDERINGS.get(sort, "-created_at"))
+    # Per-task SubTask progress for the cards, computed as aggregates in
+    # the same query — no per-card queries.
+    tasks = tasks.annotate(
+        subtask_total=Count("subtask"),
+        subtask_done=Count("subtask", filter=Q(status="Completed")),
+    ).order_by(SORT_ORDERINGS.get(sort, "-created_at"))
     if sort not in SORT_ORDERINGS:
         sort = "newest"
 
@@ -132,6 +137,29 @@ def task_list(request):
         "categories": Category.objects.all().order_by("name"),
     }
     return render(request, "tasks/task_list.html", context)
+
+
+@login_required
+def task_kanban(request):
+    """Alternate Kanban visualization of the user's own Tasks.
+
+    Same Task records, same ownership boundary, grouped by the existing
+    `status` field. Read-only board: no drag-and-drop, no persistence.
+    """
+    owned = list(
+        Task.objects.filter(user=request.user)
+        .annotate(
+            subtask_total=Count("subtask"),
+            subtask_done=Count("subtask", filter=Q(status="Completed")),
+        )
+        .order_by("-created_at")
+    )
+    columns = [
+        ("Pending", [t for t in owned if t.status == "Pending"]),
+        ("In Progress", [t for t in owned if t.status == "In Progress"]),
+        ("Completed", [t for t in owned if t.status == "Completed"]),
+    ]
+    return render(request, "tasks/task_kanban.html", {"columns": columns})
 
 
 @login_required

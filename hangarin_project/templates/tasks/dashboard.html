@@ -1,63 +1,112 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Hangarin{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-<p>Welcome, {{ request.user.username }}</p>
+<div class="page-head">
+    <h1>Dashboard</h1>
+    <a class="btn btn-primary" href="{% url 'task_create' %}">+ New Task</a>
+</div>
+<p class="subtitle">Welcome, {{ request.user.username }}</p>
 
-<h2>Task Statistics</h2>
-<ul>
-    <li>Total: {{ total_tasks }}</li>
-    <li>Completed: {{ completed_tasks }}</li>
-    <li>Pending: {{ pending_tasks }}</li>
-    <li>In Progress: {{ in_progress_tasks }}</li>
-    <li>Overdue: {{ overdue_tasks }}</li>
-</ul>
+<section class="section" aria-label="Task statistics">
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="value">{{ total_tasks }}</div>
+            <div class="label">Total</div>
+        </div>
+        <div class="stat-card stat-completed">
+            <div class="value">{{ completed_tasks }}</div>
+            <div class="label">Completed</div>
+        </div>
+        <div class="stat-card stat-pending">
+            <div class="value">{{ pending_tasks }}</div>
+            <div class="label">Pending</div>
+        </div>
+        <div class="stat-card stat-progress">
+            <div class="value">{{ in_progress_tasks }}</div>
+            <div class="label">In Progress</div>
+        </div>
+        <div class="stat-card stat-overdue">
+            <div class="value">{{ overdue_tasks }}</div>
+            <div class="label">Overdue</div>
+        </div>
+    </div>
+</section>
 
-<h2>Tasks by Priority</h2>
-{% if tasks_by_priority %}
-<ul>
-    {% for entry in tasks_by_priority %}
-    <li>{{ entry.priority__name }}: {{ entry.count }}</li>
-    {% endfor %}
-</ul>
-{% else %}
-<p>No tasks yet.</p>
-{% endif %}
+<section class="section" aria-label="Tasks by priority">
+    <h2>Tasks by Priority</h2>
+    {% if tasks_by_priority %}
+    <div class="card">
+        <ul class="distribution">
+            {% for entry in tasks_by_priority %}
+            <li>
+                <span>{{ entry.priority__name }}</span>
+                <span class="bar" aria-hidden="true"><span style="width: {% widthratio entry.count total_tasks 100 %}%;"></span></span>
+                <span>{{ entry.count }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>No tasks yet.</p></div>
+    {% endif %}
+</section>
 
-<h2>Tasks by Category</h2>
-{% if tasks_by_category %}
-<ul>
-    {% for entry in tasks_by_category %}
-    <li>{{ entry.category__name }}: {{ entry.count }}</li>
-    {% endfor %}
-</ul>
-{% else %}
-<p>No tasks yet.</p>
-{% endif %}
+<section class="section" aria-label="Tasks by category">
+    <h2>Tasks by Category</h2>
+    {% if tasks_by_category %}
+    <div class="card">
+        <ul class="distribution">
+            {% for entry in tasks_by_category %}
+            <li>
+                <span>{{ entry.category__name }}</span>
+                <span class="bar" aria-hidden="true"><span style="width: {% widthratio entry.count total_tasks 100 %}%;"></span></span>
+                <span>{{ entry.count }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>No tasks yet.</p></div>
+    {% endif %}
+</section>
 
-<h2>SubTasks</h2>
-<ul>
-    <li>Incomplete: {{ incomplete_subtasks }}</li>
-    <li>Completed: {{ completed_subtasks }}</li>
-</ul>
+<section class="section" aria-label="Subtasks">
+    <h2>SubTasks</h2>
+    <div class="card">
+        <ul class="distribution">
+            <li><span>Incomplete</span><span>{{ incomplete_subtasks }}</span></li>
+            <li><span>Completed</span><span>{{ completed_subtasks }}</span></li>
+        </ul>
+    </div>
+</section>
 
-<h2>Recent Tasks</h2>
-{% if recent_tasks %}
-<ul>
-    {% for task in recent_tasks %}
-    <li>
-        <a href="{% url 'task_detail' task.pk %}">{{ task.title }}</a>
-        — {{ task.status }}
-        — due {{ task.deadline|date:"M d, Y H:i" }}
-    </li>
-    {% endfor %}
-</ul>
-{% else %}
-<p>No tasks yet. <a href="{% url 'task_create' %}">Create one</a>.</p>
-{% endif %}
-
-<p>
-    <a href="{% url 'task_create' %}">Create New Task</a>
-    <a href="{% url 'task_list' %}">View All Tasks</a>
-</p>
+<section class="section" aria-label="Recent tasks">
+    <div class="subsection-head">
+        <h2>Recent Tasks</h2>
+        <a class="btn btn-small btn-secondary" href="{% url 'task_list' %}">View All Tasks</a>
+    </div>
+    {% if recent_tasks %}
+    <ul class="stack">
+        {% for task in recent_tasks %}
+        <li class="task-card">
+            <div class="task-card-top">
+                <h3 class="task-title"><a href="{% url 'task_detail' task.pk %}">{{ task.title }}</a></h3>
+                {% if task.status == "Pending" %}
+                <span class="badge badge-pending"><span class="dot" aria-hidden="true"></span>Pending</span>
+                {% elif task.status == "In Progress" %}
+                <span class="badge badge-in-progress"><span class="dot" aria-hidden="true"></span>In Progress</span>
+                {% else %}
+                <span class="badge badge-completed"><span class="dot" aria-hidden="true"></span>Completed</span>
+                {% endif %}
+            </div>
+            <div class="task-meta">
+                <span>Due {{ task.deadline|date:"M d, Y H:i" }}</span>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state"><p>No tasks yet. <a href="{% url 'task_create' %}">Create one</a>.</p></div>
+    {% endif %}
+</section>
 {% endblock %}

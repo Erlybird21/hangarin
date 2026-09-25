@@ -1,20 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Notes for {{ task.title }} - Hangarin{% endblock %}
 {% block content %}
-<h1>Notes for "{{ task.title }}"</h1>
-<p><a href="{% url 'note_create' task.pk %}">+ New Note</a></p>
+<div class="page-head">
+    <h1>Notes for "{{ task.title }}"</h1>
+    <a class="btn btn-primary" href="{% url 'note_create' task.pk %}">+ New Note</a>
+</div>
 {% if notes %}
-<ul>
+<ul class="stack">
     {% for note in notes %}
-    <li>
-        {{ note.content|truncatewords:20 }}
-        <a href="{% url 'note_update' task.pk note.pk %}">Edit</a>
-        <a href="{% url 'note_delete' task.pk note.pk %}">Delete</a>
+    <li class="task-card">
+        <p class="task-desc">{{ note.content|truncatewords:30 }}</p>
+        <div class="task-meta"><span>Created {{ note.created_at|date:"M d, Y H:i" }}</span></div>
+        <div class="task-actions">
+            <a class="btn btn-small btn-secondary" href="{% url 'note_update' task.pk note.pk %}">Edit</a>
+            <a class="btn btn-small btn-secondary" href="{% url 'note_delete' task.pk note.pk %}">Delete</a>
+        </div>
     </li>
     {% endfor %}
 </ul>
 {% else %}
-<p>No notes yet. <a href="{% url 'note_create' task.pk %}">Create one</a>.</p>
+<div class="empty-state"><p>No notes yet. <a href="{% url 'note_create' task.pk %}">Create one</a>.</p></div>
 {% endif %}
-<p><a href="{% url 'task_detail' task.pk %}">Back to task</a></p>
+<p><a class="btn btn-secondary" href="{% url 'task_detail' task.pk %}">Back to task</a></p>
 {% endblock %}

@@ -1,20 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Subtasks for {{ task.title }} - Hangarin{% endblock %}
 {% block content %}
-<h1>Subtasks for "{{ task.title }}"</h1>
-<p><a href="{% url 'subtask_create' task.pk %}">+ New Subtask</a></p>
+<div class="page-head">
+    <h1>Subtasks for "{{ task.title }}"</h1>
+    <a class="btn btn-primary" href="{% url 'subtask_create' task.pk %}">+ New Subtask</a>
+</div>
 {% if subtasks %}
-<ul>
+<ul class="stack">
     {% for subtask in subtasks %}
-    <li>
-        {{ subtask.title }} — {{ subtask.status }}
-        <a href="{% url 'subtask_update' task.pk subtask.pk %}">Edit</a>
-        <a href="{% url 'subtask_delete' task.pk subtask.pk %}">Delete</a>
+    <li class="task-card">
+        <div class="task-card-top">
+            <h2 class="task-title">{{ subtask.title }}</h2>
+            {% if subtask.status == "Pending" %}
+            <span class="badge badge-pending"><span class="dot" aria-hidden="true"></span>Pending</span>
+            {% elif subtask.status == "In Progress" %}
+            <span class="badge badge-in-progress"><span class="dot" aria-hidden="true"></span>In Progress</span>
+            {% else %}
+            <span class="badge badge-completed"><span class="dot" aria-hidden="true"></span>Completed</span>
+            {% endif %}
+        </div>
+        <div class="task-actions">
+            <a class="btn btn-small btn-secondary" href="{% url 'subtask_update' task.pk subtask.pk %}">Edit</a>
+            <a class="btn btn-small btn-secondary" href="{% url 'subtask_delete' task.pk subtask.pk %}">Delete</a>
+        </div>
     </li>
     {% endfor %}
 </ul>
 {% else %}
-<p>No subtasks yet. <a href="{% url 'subtask_create' task.pk %}">Create one</a>.</p>
+<div class="empty-state"><p>No subtasks yet. <a href="{% url 'subtask_create' task.pk %}">Create one</a>.</p></div>
 {% endif %}
-<p><a href="{% url 'task_detail' task.pk %}">Back to task</a></p>
+<p><a class="btn btn-secondary" href="{% url 'task_detail' task.pk %}">Back to task</a></p>
 {% endblock %}

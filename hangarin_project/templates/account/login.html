@@ -2,13 +2,19 @@
 {% load socialaccount %}
 {% block title %}Login - Hangarin{% endblock %}
 {% block content %}
-<h1>Login</h1>
-<p><a href="{% provider_login_url 'google' %}">Continue with Google</a></p>
-<form method="post" action="{% url 'account_login' %}">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-</form>
-<p><a href="{% url 'account_reset_password' %}">Forgot password?</a></p>
-<p>Don't have an account? <a href="{% url 'account_signup' %}">Sign up</a></p>
+<div class="auth-wrap">
+    <div class="auth-card">
+        <h1>Login</h1>
+        <a class="google-btn" href="{% provider_login_url 'google' %}">Continue with Google</a>
+        <form class="form-card" method="post" action="{% url 'account_login' %}">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Login</button>
+            </div>
+        </form>
+        <p class="auth-switch"><a href="{% url 'account_reset_password' %}">Forgot password?</a></p>
+        <p class="auth-switch">Don't have an account? <a href="{% url 'account_signup' %}">Sign up</a></p>
+    </div>
+</div>
 {% endblock %}

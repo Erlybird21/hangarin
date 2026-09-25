@@ -163,6 +163,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Project-level static assets (e.g. static/css/hangarin.css). Required so
+# the centralized stylesheet is served in development and collected for
+# production via `collectstatic`.
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 
 # Email

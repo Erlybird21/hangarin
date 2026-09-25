@@ -2,10 +2,14 @@
 {% block title %}Delete Task - Hangarin{% endblock %}
 {% block content %}
 <h1>Delete Task</h1>
-<p>Are you sure you want to delete "{{ task.title }}"?</p>
-<form method="post" action="">
-    {% csrf_token %}
-    <button type="submit">Yes, delete</button>
-</form>
-<p><a href="{% url 'task_detail' task.pk %}">Cancel</a></p>
+<div class="card">
+    <p>Are you sure you want to delete <strong>"{{ task.title }}"</strong>? This also removes its subtasks and notes. This action cannot be undone.</p>
+    <form method="post" action="">
+        {% csrf_token %}
+        <div class="form-actions">
+            <button class="btn btn-danger" type="submit">Yes, delete</button>
+            <a class="btn btn-secondary" href="{% url 'task_detail' task.pk %}">Cancel</a>
+        </div>
+    </form>
+</div>
 {% endblock %}

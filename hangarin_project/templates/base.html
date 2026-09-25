@@ -1,32 +1,46 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Hangarin{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/hangarin.css' %}">
 </head>
 <body>
-<header>
-    <nav>
-        <span>Hangarin</span>
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="{% if request.user.is_authenticated %}{% url 'task_list' %}{% else %}{% url 'account_login' %}{% endif %}">Hangarin</a>
         {% if request.user.is_authenticated %}
+        {% with current=request.resolver_match.url_name %}
+        <nav class="app-nav" aria-label="Primary">
+            <a class="nav-link" href="{% url 'dashboard' %}"{% if current == "dashboard" %} aria-current="page"{% endif %}>Dashboard</a>
+            <a class="nav-link" href="{% url 'task_list' %}"{% if current in "task_list task_kanban task_detail task_create task_update" %} aria-current="page"{% endif %}>Tasks</a>
+        </nav>
+        {% endwith %}
+        <div class="account-area">
             <span>{{ request.user.username }}</span>
-            <a href="{% url 'account_logout' %}">Logout</a>
+            <a class="nav-link" href="{% url 'account_logout' %}">Logout</a>
+        </div>
         {% else %}
-            <a href="{% url 'account_login' %}">Login</a>
-            <a href="{% url 'account_signup' %}">Sign up</a>
+        <nav class="app-nav" aria-label="Primary">
+            <a class="nav-link" href="{% url 'account_login' %}">Login</a>
+            <a class="nav-link" href="{% url 'account_signup' %}">Sign up</a>
+        </nav>
         {% endif %}
-    </nav>
+    </div>
 </header>
 <main>
-    {% if messages %}
-    <ul>
-        {% for message in messages %}
-        <li>{{ message }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-    {% block content %}{% endblock %}
+    <div class="container">
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </div>
 </main>
 </body>
 </html>

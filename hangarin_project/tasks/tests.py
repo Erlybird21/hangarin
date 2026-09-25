@@ -1026,3 +1026,71 @@ class TaskListFilterTests(TestCase):
                 self.assertIn("Alice pending", titles)
                 self.assertNotIn("Bob pending", titles)
                 self.assertNotIn("Bob done", titles)
+
+
+class TaskKanbanTests(TestCase):
+    """Phase 6: Kanban board groups the user's own Tasks by status."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.priority = Priority.objects.create(name="high")
+        cls.category = Category.objects.create(name="Work")
+
+    def make_task(self, user, title="Sample task", status="Pending"):
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status=status,
+            deadline=timezone.now() + timedelta(days=1),
+            priority=self.priority,
+            category=self.category,
+        )
+
+    def columns(self, response):
+        return {
+            status: [t.title for t in board_tasks]
+            for status, board_tasks in response.context["columns"]
+        }
+
+    def test_anonymous_redirected_to_login(self):
+        response = self.client.get(reverse("task_kanban"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_authenticated_user_can_access(self):
+        self.client.force_login(self.alice)
+        response = self.client.get(reverse("task_kanban"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_tasks_grouped_by_status(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo", status="Pending")
+        self.make_task(self.alice, title="Doing", status="In Progress")
+        self.make_task(self.alice, title="Done", status="Completed")
+        cols = self.columns(self.client.get(reverse("task_kanban")))
+        self.assertEqual(cols["Pending"], ["Todo"])
+        self.assertEqual(cols["In Progress"], ["Doing"])
+        self.assertEqual(cols["Completed"], ["Done"])
+
+    def test_other_user_tasks_never_appear(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Alice todo", status="Pending")
+        self.make_task(self.bob, title="Bob todo", status="Pending")
+        self.make_task(self.bob, title="Bob done", status="Completed")
+        response = self.client.get(reverse("task_kanban"))
+        cols = self.columns(response)
+        self.assertEqual(cols["Pending"], ["Alice todo"])
+        self.assertEqual(cols["In Progress"], [])
+        self.assertEqual(cols["Completed"], [])
+
+    def test_kanban_links_resolve_to_task_detail(self):
+        self.client.force_login(self.alice)
+        task = self.make_task(self.alice, title="Linked", status="Pending")
+        response = self.client.get(reverse("task_kanban"))
+        self.assertContains(
+            response, reverse("task_detail", args=[task.pk])
+        )

@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Logout - Hangarin{% endblock %}
 {% block content %}
-<h1>Logout</h1>
-<p>Are you sure you want to log out?</p>
-<form method="post" action="{% url 'account_logout' %}">
-    {% csrf_token %}
-    <button type="submit">Logout</button>
-</form>
+<div class="auth-wrap">
+    <div class="auth-card">
+        <h1>Logout</h1>
+        <p>Are you sure you want to log out?</p>
+        <form class="form-card" method="post" action="{% url 'account_logout' %}">
+            {% csrf_token %}
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Logout</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

@@ -1,0 +1,773 @@
+/* Hangarin application stylesheet.
+ *
+ * Erl's design system, applied semantically:
+ * - Deep Blue   (#1E40AF) logo, primary buttons, important links
+ * - Sky Blue    (#3B82F6) hover/focus/active states, progress
+ * - Teal        (#14B8A6) completed/success
+ * - Amber       (#F59E0B) pending/attention
+ * - Red         (#EF4444) overdue/danger/delete
+ * - Soft Gray   (#F8FAFC) page background
+ * - White       (#FFFFFF) cards/forms/panels
+ * - Slate       (#64748B) secondary text
+ *
+ * Mobile-first. Breakpoints: 640px (tablet), 1024px (desktop).
+ */
+
+:root {
+    --primary: #1e40af;
+    --primary-light: #3b82f6;
+    --accent: #14b8a6;
+    --background: #f8fafc;
+    --surface: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --border: #e2e8f0;
+    --radius: 0.5rem;
+    --max-width: 64rem;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+/* ---------- App shell ---------- */
+
+.app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.app-header-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary);
+    text-decoration: none;
+    margin-right: auto;
+}
+
+.app-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.nav-link {
+    color: var(--text);
+    text-decoration: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+}
+
+.nav-link:hover {
+    background: var(--background);
+    color: var(--primary);
+}
+
+.nav-link[aria-current="page"] {
+    color: var(--primary);
+    font-weight: 600;
+    background: #eff6ff;
+}
+
+.account-area {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+}
+
+.page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.page-head h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.subtitle {
+    color: var(--muted);
+    margin: 0 0 1.25rem;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    filter: brightness(1.15);
+    color: #fff;
+}
+
+.btn-secondary {
+    background: var(--surface);
+    color: var(--primary);
+    border-color: var(--border);
+}
+
+.btn-secondary:hover {
+    border-color: var(--primary-light);
+    color: var(--primary);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: #fff;
+}
+
+.btn-danger:hover {
+    filter: brightness(1.1);
+    color: #fff;
+}
+
+.btn-small {
+    min-height: 2.25rem;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* ---------- View switch (List / Kanban) ---------- */
+
+.view-switch {
+    display: inline-flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.25rem;
+    gap: 0.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.view-switch a {
+    padding: 0.5rem 1rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    border-radius: calc(var(--radius) - 0.125rem);
+    color: var(--muted);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.view-switch a:hover {
+    color: var(--primary);
+}
+
+.view-switch a[aria-current="page"] {
+    background: var(--primary);
+    color: #fff;
+}
+
+/* ---------- Filters ---------- */
+
+.filters {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.filters .field {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.filters .actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: end;
+}
+
+/* ---------- Cards & lists ---------- */
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+
+.stack {
+    display: grid;
+    gap: 0.75rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.task-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.task-card:hover {
+    border-color: var(--primary-light);
+}
+
+.task-card-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.task-title {
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+.task-title a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.task-title a:hover {
+    text-decoration: underline;
+}
+
+.task-desc {
+    margin: 0;
+    color: var(--muted);
+}
+
+.task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--muted);
+}
+
+.task-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ---------- Badges & tags ---------- */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.badge .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex: none;
+}
+
+.badge-pending .dot {
+    background: var(--warning);
+}
+
+.badge-in-progress .dot {
+    background: var(--primary-light);
+}
+
+.badge-completed .dot {
+    background: var(--accent);
+}
+
+.badge-overdue .dot {
+    background: var(--danger);
+}
+
+.badge-overdue {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.tag {
+    display: inline-block;
+    font-size: 0.8125rem;
+    color: var(--muted);
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    white-space: nowrap;
+}
+
+/* ---------- Dashboard ---------- */
+
+.stat-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, 1fr);
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+
+.stat-card .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-card .label {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.stat-card.stat-overdue {
+    border-left: 0.25rem solid var(--danger);
+}
+
+.stat-card.stat-completed {
+    border-left: 0.25rem solid var(--accent);
+}
+
+.stat-card.stat-pending {
+    border-left: 0.25rem solid var(--warning);
+}
+
+.stat-card.stat-progress {
+    border-left: 0.25rem solid var(--primary-light);
+}
+
+.section {
+    margin-bottom: 1.5rem;
+}
+
+.section h2 {
+    font-size: 1.125rem;
+    margin: 0 0 0.75rem;
+}
+
+.distribution {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.distribution li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.distribution .bar {
+    flex: 1;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.distribution .bar > span {
+    display: block;
+    height: 100%;
+    background: var(--primary-light);
+}
+
+/* ---------- Kanban ---------- */
+
+.kanban-board {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: min(20rem, 85vw);
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.kanban-column {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.kanban-column > h2 {
+    margin: 0;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.kanban-column[data-status="Pending"] > h2 {
+    border-bottom-color: var(--warning);
+}
+
+.kanban-column[data-status="In Progress"] > h2 {
+    border-bottom-color: var(--primary-light);
+}
+
+.kanban-column[data-status="Completed"] > h2 {
+    border-bottom-color: var(--accent);
+}
+
+.kanban-column .count {
+    margin-left: auto;
+    font-size: 0.8125rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    padding: 0 0.5rem;
+}
+
+.kanban-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.375rem;
+}
+
+.kanban-card:hover {
+    border-color: var(--primary-light);
+}
+
+.kanban-card h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.kanban-card h3 a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.kanban-card h3 a:hover {
+    text-decoration: underline;
+}
+
+.empty-column {
+    color: var(--muted);
+    font-size: 0.875rem;
+    padding: 0.75rem;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+}
+
+/* ---------- Task detail ---------- */
+
+.detail-head {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.detail-head h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.description {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    white-space: pre-wrap;
+}
+
+.timestamps {
+    color: var(--muted);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+
+.subsection-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.subsection-head h2 {
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+/* ---------- Forms ---------- */
+
+.form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    max-width: 40rem;
+}
+
+.form-card p {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0 0 1rem;
+}
+
+.form-card label {
+    font-weight: 600;
+    font-size: 0.9375rem;
+}
+
+.form-card input[type="text"],
+.form-card input[type="email"],
+.form-card input[type="password"],
+.form-card input[type="datetime-local"],
+.form-card select,
+.form-card textarea {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    min-height: 2.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+}
+
+.form-card textarea {
+    min-height: 6rem;
+    resize: vertical;
+}
+
+.form-card .helptext {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.form-card .errorlist {
+    list-style: none;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    color: var(--danger);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+}
+
+/* ---------- Auth pages ---------- */
+
+.auth-wrap {
+    max-width: 28rem;
+    margin: 2rem auto;
+}
+
+.auth-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+}
+
+.auth-card h1 {
+    margin: 0 0 1rem;
+    font-size: 1.5rem;
+    text-align: center;
+}
+
+.auth-card .form-card {
+    border: 0;
+    padding: 0;
+    max-width: none;
+}
+
+.google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.75rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.google-btn:hover {
+    border-color: var(--primary-light);
+    color: var(--primary);
+}
+
+.auth-switch {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9375rem;
+}
+
+/* ---------- Messages / empty states ---------- */
+
+.messages {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.messages li {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 0.25rem solid var(--primary-light);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+}
+
+.empty-state {
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    color: var(--muted);
+}
+
+.empty-state a {
+    color: var(--primary);
+}
+
+/* ---------- Focus visibility (keyboard users) ---------- */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--primary-light);
+    outline-offset: 2px;
+}
+
+/* ---------- Tablet and up ---------- */
+
+@media (min-width: 40rem) {
+    .filters {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* ---------- Desktop ---------- */
+
+@media (min-width: 64rem) {
+    .filters {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .kanban-board {
+        grid-auto-flow: initial;
+        grid-template-columns: repeat(3, 1fr);
+        grid-auto-columns: initial;
+        overflow-x: visible;
+    }
+}
