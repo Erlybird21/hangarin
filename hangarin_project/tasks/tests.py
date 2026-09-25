@@ -714,3 +714,315 @@ class DashboardTests(TestCase):
         self.assertEqual(list(response.context["tasks_by_priority"]), [])
         self.assertEqual(list(response.context["tasks_by_category"]), [])
         self.assertEqual(list(response.context["recent_tasks"]), [])
+
+
+class TaskListFilterTests(TestCase):
+    """Phase 5: task-list filtering and sorting, user-scoped."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.bob = User.objects.create_user(username="bob", password="x")
+        cls.high = Priority.objects.create(name="high")
+        cls.low = Priority.objects.create(name="low")
+        cls.work = Category.objects.create(name="Work")
+        cls.personal = Category.objects.create(name="Personal")
+
+    def make_task(
+        self,
+        user,
+        title="Sample task",
+        status="Pending",
+        deadline=None,
+        priority=None,
+        category=None,
+    ):
+        if deadline is None:
+            deadline = timezone.now() + timedelta(days=1)
+        return Task.objects.create(
+            user=user,
+            title=title,
+            description="desc",
+            status=status,
+            deadline=deadline,
+            priority=priority or self.high,
+            category=category or self.work,
+        )
+
+    def titles(self, response):
+        return [t.title for t in response.context["tasks"]]
+
+    def test_anonymous_still_redirected_to_login(self):
+        response = self.client.get(reverse("task_list") + "?status=Pending")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_status_filter(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Done", status="Completed")
+        self.make_task(self.alice, title="Todo", status="Pending")
+        response = self.client.get(reverse("task_list") + "?status=Pending")
+        self.assertEqual(self.titles(response), ["Todo"])
+
+    def test_priority_filter(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="High task", priority=self.high)
+        self.make_task(self.alice, title="Low task", priority=self.low)
+        response = self.client.get(
+            reverse("task_list") + f"?priority={self.low.pk}"
+        )
+        self.assertEqual(self.titles(response), ["Low task"])
+
+    def test_category_filter(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Work task", category=self.work)
+        self.make_task(
+            self.alice, title="Personal task", category=self.personal
+        )
+        response = self.client.get(
+            reverse("task_list") + f"?category={self.personal.pk}"
+        )
+        self.assertEqual(self.titles(response), ["Personal task"])
+
+    def test_overdue_filter(self):
+        self.client.force_login(self.alice)
+        past = timezone.now() - timedelta(days=1)
+        future = timezone.now() + timedelta(days=1)
+        self.make_task(
+            self.alice, title="Overdue", status="Pending", deadline=past
+        )
+        self.make_task(
+            self.alice,
+            title="Overdue but done",
+            status="Completed",
+            deadline=past,
+        )
+        self.make_task(
+            self.alice, title="Future", status="Pending", deadline=future
+        )
+        response = self.client.get(reverse("task_list") + "?deadline=overdue")
+        self.assertEqual(self.titles(response), ["Overdue"])
+
+    def test_due_today_filter(self):
+        self.client.force_login(self.alice)
+        self.make_task(
+            self.alice, title="Today", deadline=timezone.now()
+        )
+        self.make_task(
+            self.alice,
+            title="Tomorrow",
+            deadline=timezone.now() + timedelta(days=1),
+        )
+        response = self.client.get(
+            reverse("task_list") + "?deadline=due_today"
+        )
+        self.assertEqual(self.titles(response), ["Today"])
+
+    def test_upcoming_filter(self):
+        self.client.force_login(self.alice)
+        past = timezone.now() - timedelta(days=1)
+        future = timezone.now() + timedelta(days=1)
+        self.make_task(
+            self.alice, title="Past", status="Pending", deadline=past
+        )
+        self.make_task(
+            self.alice, title="Future", status="Pending", deadline=future
+        )
+        response = self.client.get(
+            reverse("task_list") + "?deadline=upcoming"
+        )
+        self.assertEqual(self.titles(response), ["Future"])
+
+    def test_combined_filters(self):
+        self.client.force_login(self.alice)
+        self.make_task(
+            self.alice,
+            title="Match",
+            status="Pending",
+            priority=self.high,
+            category=self.work,
+            deadline=timezone.now() - timedelta(hours=1),
+        )
+        self.make_task(
+            self.alice,
+            title="Wrong status",
+            status="Completed",
+            priority=self.high,
+            category=self.work,
+            deadline=timezone.now() - timedelta(hours=1),
+        )
+        self.make_task(
+            self.alice,
+            title="Wrong priority",
+            status="Pending",
+            priority=self.low,
+            category=self.work,
+            deadline=timezone.now() - timedelta(hours=1),
+        )
+        url = (
+            reverse("task_list")
+            + f"?status=Pending&priority={self.high.pk}"
+            + f"&category={self.work.pk}&deadline=overdue"
+        )
+        response = self.client.get(url)
+        self.assertEqual(self.titles(response), ["Match"])
+
+    def test_filtered_empty_result_renders(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo", status="Pending")
+        response = self.client.get(reverse("task_list") + "?status=Completed")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.titles(response), [])
+        self.assertContains(response, "No tasks match")
+
+    def test_invalid_status_ignored(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo", status="Pending")
+        self.make_task(self.alice, title="Done", status="Completed")
+        response = self.client.get(reverse("task_list") + "?status=Bogus")
+        self.assertEqual(len(self.titles(response)), 2)
+
+    def test_empty_status_ignored(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo", status="Pending")
+        response = self.client.get(reverse("task_list") + "?status=")
+        self.assertEqual(self.titles(response), ["Todo"])
+
+    def test_malformed_priority_and_category_ignored(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo")
+        for query in ("?priority=abc", "?category=abc"):
+            with self.subTest(query=query):
+                response = self.client.get(reverse("task_list") + query)
+                self.assertEqual(self.titles(response), ["Todo"])
+
+    def test_nonexistent_priority_and_category_match_nothing(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo")
+        missing = 9999
+        for query in (
+            f"?priority={missing}",
+            f"?category={missing}",
+        ):
+            with self.subTest(query=query):
+                response = self.client.get(reverse("task_list") + query)
+                self.assertEqual(self.titles(response), [])
+
+    def test_unknown_deadline_defaults_to_all(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Todo")
+        response = self.client.get(reverse("task_list") + "?deadline=bogus")
+        self.assertEqual(self.titles(response), ["Todo"])
+        self.assertEqual(response.context["deadline_filter"], "all")
+
+    def test_unknown_sort_falls_back_to_newest(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="First")
+        self.make_task(self.alice, title="Second")
+        response = self.client.get(reverse("task_list") + "?sort=bogus")
+        self.assertEqual(self.titles(response), ["Second", "First"])
+        self.assertEqual(response.context["sort"], "newest")
+
+    def test_completed_and_overdue_yields_nothing(self):
+        self.client.force_login(self.alice)
+        self.make_task(
+            self.alice,
+            title="Done overdue",
+            status="Completed",
+            deadline=timezone.now() - timedelta(days=1),
+        )
+        response = self.client.get(
+            reverse("task_list") + "?status=Completed&deadline=overdue"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.titles(response), [])
+
+    def test_default_ordering_is_newest_first(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="First")
+        self.make_task(self.alice, title="Second")
+        response = self.client.get(reverse("task_list"))
+        self.assertEqual(self.titles(response), ["Second", "First"])
+
+    def test_sort_oldest(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="First")
+        self.make_task(self.alice, title="Second")
+        response = self.client.get(reverse("task_list") + "?sort=oldest")
+        self.assertEqual(self.titles(response), ["First", "Second"])
+
+    def test_sort_title_asc_and_desc(self):
+        self.client.force_login(self.alice)
+        self.make_task(self.alice, title="Charlie")
+        self.make_task(self.alice, title="Alpha")
+        self.make_task(self.alice, title="Bravo")
+        response = self.client.get(reverse("task_list") + "?sort=title_asc")
+        self.assertEqual(
+            self.titles(response), ["Alpha", "Bravo", "Charlie"]
+        )
+        response = self.client.get(reverse("task_list") + "?sort=title_desc")
+        self.assertEqual(
+            self.titles(response), ["Charlie", "Bravo", "Alpha"]
+        )
+
+    def test_sort_recently_updated(self):
+        self.client.force_login(self.alice)
+        first = self.make_task(self.alice, title="First")
+        self.make_task(self.alice, title="Second")
+        first.title = "First edited"
+        first.save()
+        response = self.client.get(
+            reverse("task_list") + "?sort=recently_updated"
+        )
+        self.assertEqual(
+            self.titles(response), ["First edited", "Second"]
+        )
+
+    def test_sort_deadline_soonest_and_latest(self):
+        self.client.force_login(self.alice)
+        now = timezone.now()
+        self.make_task(
+            self.alice, title="Later", deadline=now + timedelta(days=3)
+        )
+        self.make_task(
+            self.alice, title="Sooner", deadline=now + timedelta(days=1)
+        )
+        response = self.client.get(
+            reverse("task_list") + "?sort=deadline_soonest"
+        )
+        self.assertEqual(self.titles(response), ["Sooner", "Later"])
+        response = self.client.get(
+            reverse("task_list") + "?sort=deadline_latest"
+        )
+        self.assertEqual(self.titles(response), ["Later", "Sooner"])
+
+    def test_filters_do_not_expose_other_user_tasks(self):
+        self.client.force_login(self.alice)
+        self.make_task(
+            self.alice, title="Alice pending", status="Pending"
+        )
+        self.make_task(
+            self.bob,
+            title="Bob pending",
+            status="Pending",
+            priority=self.high,
+            category=self.work,
+        )
+        self.make_task(self.bob, title="Bob done", status="Completed")
+        for query in (
+            "",
+            "?status=Pending",
+            f"?priority={self.high.pk}",
+            f"?category={self.work.pk}",
+            "?deadline=all",
+            "?sort=title_asc",
+            f"?status=Pending&priority={self.high.pk}"
+            f"&category={self.work.pk}&sort=title_asc",
+        ):
+            with self.subTest(query=query):
+                response = self.client.get(reverse("task_list") + query)
+                titles = self.titles(response)
+                self.assertIn("Alice pending", titles)
+                self.assertNotIn("Bob pending", titles)
+                self.assertNotIn("Bob done", titles)

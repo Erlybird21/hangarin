@@ -4,7 +4,27 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import NoteForm, SubTaskForm, TaskForm
-from .models import Note, SubTask, Task
+from .models import Category, Note, Priority, SubTask, Task
+
+
+# Valid `status` choices accepted by the task-list `?status=` filter.
+# Anything else is ignored (falls back to unfiltered).
+VALID_STATUS_FILTERS = {"Pending", "In Progress", "Completed"}
+
+# Valid `?sort=` tokens mapped to ORM orderings. Anything else falls
+# back to "newest" ("-created_at").
+SORT_ORDERINGS = {
+    "newest": "-created_at",
+    "oldest": "created_at",
+    "recently_updated": "-updated_at",
+    "oldest_updated": "updated_at",
+    "deadline_soonest": "deadline",
+    "deadline_latest": "-deadline",
+    "title_asc": "title",
+    "title_desc": "-title",
+    "priority": "priority__name",
+    "status": "status",
+}
 
 
 @login_required
@@ -54,8 +74,64 @@ def _owned_task_or_404(request, pk):
 
 @login_required
 def task_list(request):
-    tasks = Task.objects.filter(user=request.user).order_by("-created_at")
-    return render(request, "tasks/task_list.html", {"tasks": tasks})
+    # Ownership boundary: every filter/sort below narrows this
+    # user-scoped queryset. Query parameters can never widen it.
+    tasks = Task.objects.filter(user=request.user)
+
+    status_filter = request.GET.get("status", "")
+    if status_filter in VALID_STATUS_FILTERS:
+        tasks = tasks.filter(status=status_filter)
+    else:
+        status_filter = ""
+
+    priority_filter = request.GET.get("priority", "")
+    try:
+        priority_id = int(priority_filter)
+    except (TypeError, ValueError):
+        # Malformed IDs are ignored; valid-but-nonexistent IDs apply
+        # the filter and naturally match zero tasks.
+        priority_filter = ""
+    else:
+        tasks = tasks.filter(priority_id=priority_id)
+
+    category_filter = request.GET.get("category", "")
+    try:
+        category_id = int(category_filter)
+    except (TypeError, ValueError):
+        category_filter = ""
+    else:
+        tasks = tasks.filter(category_id=category_id)
+
+    deadline_filter = request.GET.get("deadline", "all")
+    now = timezone.now()
+    if deadline_filter == "overdue":
+        tasks = tasks.filter(deadline__lt=now).exclude(status="Completed")
+    elif deadline_filter == "due_today":
+        tasks = tasks.filter(deadline__date=now.date())
+    elif deadline_filter == "upcoming":
+        tasks = tasks.filter(deadline__gt=now)
+    else:
+        deadline_filter = "all"
+
+    sort = request.GET.get("sort", "newest")
+    tasks = tasks.order_by(SORT_ORDERINGS.get(sort, "-created_at"))
+    if sort not in SORT_ORDERINGS:
+        sort = "newest"
+
+    context = {
+        "tasks": tasks,
+        "status_filter": status_filter,
+        "priority_filter": priority_filter,
+        "category_filter": category_filter,
+        "deadline_filter": deadline_filter,
+        "sort": sort,
+        "status_choices": sorted(VALID_STATUS_FILTERS),
+        # Priority/Category are global metadata shown as filter options;
+        # the Tasks they select from remain user-scoped above.
+        "priorities": Priority.objects.all().order_by("name"),
+        "categories": Category.objects.all().order_by("name"),
+    }
+    return render(request, "tasks/task_list.html", context)
 
 
 @login_required

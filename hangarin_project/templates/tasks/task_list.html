@@ -3,6 +3,51 @@
 {% block content %}
 <h1>My Tasks</h1>
 <p><a href="{% url 'task_create' %}">+ New Task</a></p>
+<form method="get" action="{% url 'task_list' %}">
+    <label for="filter-status">Status</label>
+    <select name="status" id="filter-status">
+        <option value=""{% if not status_filter %} selected{% endif %}>All</option>
+        {% for choice in status_choices %}
+        <option value="{{ choice }}"{% if status_filter == choice %} selected{% endif %}>{{ choice }}</option>
+        {% endfor %}
+    </select>
+    <label for="filter-priority">Priority</label>
+    <select name="priority" id="filter-priority">
+        <option value=""{% if not priority_filter %} selected{% endif %}>All</option>
+        {% for priority in priorities %}
+        <option value="{{ priority.pk }}"{% if priority_filter == priority.pk|stringformat:"s" %} selected{% endif %}>{{ priority.name }}</option>
+        {% endfor %}
+    </select>
+    <label for="filter-category">Category</label>
+    <select name="category" id="filter-category">
+        <option value=""{% if not category_filter %} selected{% endif %}>All</option>
+        {% for category in categories %}
+        <option value="{{ category.pk }}"{% if category_filter == category.pk|stringformat:"s" %} selected{% endif %}>{{ category.name }}</option>
+        {% endfor %}
+    </select>
+    <label for="filter-deadline">Deadline</label>
+    <select name="deadline" id="filter-deadline">
+        <option value="all"{% if deadline_filter == "all" %} selected{% endif %}>All</option>
+        <option value="overdue"{% if deadline_filter == "overdue" %} selected{% endif %}>Overdue</option>
+        <option value="due_today"{% if deadline_filter == "due_today" %} selected{% endif %}>Due today</option>
+        <option value="upcoming"{% if deadline_filter == "upcoming" %} selected{% endif %}>Upcoming</option>
+    </select>
+    <label for="sort">Sort</label>
+    <select name="sort" id="sort">
+        <option value="newest"{% if sort == "newest" %} selected{% endif %}>Newest</option>
+        <option value="oldest"{% if sort == "oldest" %} selected{% endif %}>Oldest</option>
+        <option value="recently_updated"{% if sort == "recently_updated" %} selected{% endif %}>Recently updated</option>
+        <option value="oldest_updated"{% if sort == "oldest_updated" %} selected{% endif %}>Oldest updated</option>
+        <option value="deadline_soonest"{% if sort == "deadline_soonest" %} selected{% endif %}>Deadline soonest</option>
+        <option value="deadline_latest"{% if sort == "deadline_latest" %} selected{% endif %}>Deadline latest</option>
+        <option value="title_asc"{% if sort == "title_asc" %} selected{% endif %}>Title A–Z</option>
+        <option value="title_desc"{% if sort == "title_desc" %} selected{% endif %}>Title Z–A</option>
+        <option value="priority"{% if sort == "priority" %} selected{% endif %}>Priority</option>
+        <option value="status"{% if sort == "status" %} selected{% endif %}>Status</option>
+    </select>
+    <button type="submit">Apply</button>
+    <a href="{% url 'task_list' %}">Clear</a>
+</form>
 {% if tasks %}
 <ul>
     {% for task in tasks %}
@@ -14,6 +59,6 @@
     {% endfor %}
 </ul>
 {% else %}
-<p>No tasks yet. <a href="{% url 'task_create' %}">Create one</a>.</p>
+<p>No tasks match the current filters. <a href="{% url 'task_list' %}">Clear filters</a> or <a href="{% url 'task_create' %}">create one</a>.</p>
 {% endif %}
 {% endblock %}
