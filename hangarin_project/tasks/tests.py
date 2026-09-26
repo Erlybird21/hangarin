@@ -226,6 +226,41 @@ class LoginPageTests(TestCase):
         )
 
 
+class SocialConfirmPageTests(TestCase):
+    """Custom socialaccount/login.html confirmation page (PSUSphere-style).
+
+    Verifies the override renders for both providers with the dynamic
+    provider name. No real OAuth credentials or external requests involved:
+    GET on the provider login URL renders the confirmation template.
+    """
+
+    def test_google_confirmation_page_renders(self):
+        response = self.client.get(reverse("google_login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "socialaccount/login.html")
+        self.assertContains(response, "Confirm Sign In")
+        self.assertContains(response, "Continue with Google")
+        self.assertContains(response, "Google")
+
+    def test_github_confirmation_page_renders(self):
+        response = self.client.get(reverse("github_login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "socialaccount/login.html")
+        self.assertContains(response, "Confirm Sign In")
+        self.assertContains(response, "Continue with GitHub")
+        self.assertContains(response, "GitHub")
+
+    def test_confirmation_page_has_post_form_with_csrf_and_cancel(self):
+        for name in ("google_login", "github_login"):
+            with self.subTest(provider=name):
+                response = self.client.get(reverse(name))
+                self.assertContains(response, 'method="post"', count=1)
+                self.assertContains(response, "csrfmiddlewaretoken")
+                self.assertContains(
+                    response, f'href="{reverse("account_login")}"'
+                )
+
+
 class TaskCRUDTests(TestCase):
     """Phase 3 milestone 1: Task CRUD with ownership enforcement."""
 

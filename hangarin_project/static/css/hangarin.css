@@ -741,6 +741,23 @@ body {
     font-size: 0.9375rem;
 }
 
+/* Social OAuth confirmation page (templates/socialaccount/login.html).
+ * Reuses the auth-card layout; only the explanatory text and the
+ * full-width confirmation button need dedicated rules. */
+.auth-text {
+    text-align: center;
+    color: var(--muted);
+    margin: 0 0 1rem;
+}
+
+.auth-confirm-form {
+    margin-bottom: 1rem;
+}
+
+.auth-confirm-form .btn {
+    width: 100%;
+}
+
 /* ---------- Messages / empty states ---------- */
 
 .messages {
