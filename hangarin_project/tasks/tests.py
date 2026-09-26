@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -1575,6 +1575,70 @@ class SeedCommandTests(TestCase):
     def test_rerun_does_not_duplicate_tasks(self):
         self.run_seed()
         self.run_seed()
+        self.assertEqual(Task.objects.count(), 30)
+
+    def run_seed_superuser(self):
+        call_command(
+            "create_initial_data", superuser=True, verbosity=0
+        )
+
+    def make_superuser(self, username="admin"):
+        return get_user_model().objects.create_superuser(
+            username=username,
+            email=f"{username}@example.com",
+            password="x",
+        )
+
+    def test_superuser_flag_uses_existing_superuser(self):
+        admin = self.make_superuser()
+        self.run_seed_superuser()
+        tasks = Task.objects.all()
+        self.assertEqual(tasks.count(), 30)
+        owners = set(tasks.values_list("user__username", flat=True))
+        self.assertEqual(owners, {admin.username})
+        # The isolated dev user is not created on the superuser path.
+        self.assertFalse(
+            get_user_model().objects.filter(
+                username="dev_seed_user").exists()
+        )
+
+    def test_superuser_flag_subtasks_notes_derive_ownership(self):
+        admin = self.make_superuser()
+        self.run_seed_superuser()
+        self.assertGreater(SubTask.objects.count(), 30)
+        self.assertGreater(Note.objects.count(), 10)
+        self.assertEqual(
+            set(SubTask.objects.values_list(
+                "task__user__username", flat=True)),
+            {admin.username},
+        )
+        self.assertEqual(
+            set(Note.objects.values_list(
+                "task__user__username", flat=True)),
+            {admin.username},
+        )
+
+    def test_superuser_flag_deterministic_distributions(self):
+        self.make_superuser()
+        self.run_seed_superuser()
+        tasks = Task.objects.all()
+        self.assertEqual(tasks.filter(status="Pending").count(), 15)
+        self.assertEqual(tasks.filter(status="In Progress").count(), 9)
+        self.assertEqual(tasks.filter(status="Completed").count(), 6)
+
+    def test_superuser_flag_without_superuser_raises(self):
+        with self.assertRaises(CommandError):
+            self.run_seed_superuser()
+        self.assertEqual(Task.objects.count(), 0)
+        self.assertFalse(
+            get_user_model().objects.filter(
+                username="dev_seed_user").exists()
+        )
+
+    def test_superuser_flag_rerun_is_idempotent(self):
+        self.make_superuser()
+        self.run_seed_superuser()
+        self.run_seed_superuser()
         self.assertEqual(Task.objects.count(), 30)
 
 

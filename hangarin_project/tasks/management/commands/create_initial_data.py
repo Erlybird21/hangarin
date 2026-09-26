@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from faker import Faker
 from tasks.models import Priority, Category, Task, SubTask, Note
@@ -334,16 +334,41 @@ TASKS_DATA = [
 class Command(BaseCommand):
     help = 'Create initial data for the application'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--superuser',
+            action='store_true',
+            help=(
+                'Seed tasks under the existing superuser instead of '
+                'dev_seed_user. Fails if no superuser exists.'
+            ),
+        )
+
     def handle(self, *args, **kwargs):
         self.create_priorities()
         self.create_categories()
-        owner = self.get_dev_user()
+        if kwargs.get('superuser'):
+            owner = self.get_existing_superuser()
+        else:
+            owner = self.get_dev_user()
         if Task.objects.exists():
             self.stdout.write('Tasks already exist, skipping task seeding.')
             return
         self.create_tasks(owner)
         self.stdout.write(self.style.SUCCESS(
             'Development data created successfully.'))
+
+    def get_existing_superuser(self):
+        User = get_user_model()
+        superuser = User.objects.filter(
+            is_superuser=True, is_staff=True
+        ).order_by('pk').first()
+        if superuser is None:
+            raise CommandError(
+                'No superuser exists. Create one with '
+                '"python manage.py createsuperuser" before using --superuser.'
+            )
+        return superuser
 
     def get_dev_user(self):
         user, created = get_user_model().objects.get_or_create(
