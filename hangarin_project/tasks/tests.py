@@ -227,38 +227,45 @@ class LoginPageTests(TestCase):
 
 
 class SocialConfirmPageTests(TestCase):
-    """Custom socialaccount/login.html confirmation page (PSUSphere-style).
+    """Social login goes directly to the provider (no custom confirm page).
 
-    Verifies the override renders for both providers with the dynamic
-    provider name. No real OAuth credentials or external requests involved:
-    GET on the provider login URL renders the confirmation template.
+    SOCIALACCOUNT_LOGIN_ON_GET=True skips allauth's intermediate
+    confirmation so Hangarin login goes: login page -> provider auth UI.
+    No real OAuth credentials or external requests involved: GET on the
+    provider login URL must 302-redirect to the provider authorization
+    endpoint, never render a custom socialaccount/login.html override.
     """
 
-    def test_google_confirmation_page_renders(self):
+    def test_google_login_redirects_directly_to_google(self):
         response = self.client.get(reverse("google_login"))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "socialaccount/login.html")
-        self.assertContains(response, "Confirm Sign In")
-        self.assertContains(response, "Continue with Google")
-        self.assertContains(response, "Google")
+        self.assertEqual(response.status_code, 302)
+        location = response.get("Location", "")
+        self.assertIn("accounts.google.com", location)
+        self.assertIn("client_id=", location)
+        self.assertNotIn("Confirm Sign In", location)
 
-    def test_github_confirmation_page_renders(self):
+    def test_github_login_redirects_directly_to_github(self):
         response = self.client.get(reverse("github_login"))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "socialaccount/login.html")
-        self.assertContains(response, "Confirm Sign In")
-        self.assertContains(response, "Continue with GitHub")
-        self.assertContains(response, "GitHub")
+        self.assertEqual(response.status_code, 302)
+        location = response.get("Location", "")
+        self.assertIn("github.com", location)
+        self.assertIn("client_id=", location)
 
-    def test_confirmation_page_has_post_form_with_csrf_and_cancel(self):
+    def test_no_custom_social_confirmation_template_used(self):
         for name in ("google_login", "github_login"):
             with self.subTest(provider=name):
                 response = self.client.get(reverse(name))
-                self.assertContains(response, 'method="post"', count=1)
-                self.assertContains(response, "csrfmiddlewaretoken")
-                self.assertContains(
-                    response, f'href="{reverse("account_login")}"'
-                )
+                self.assertEqual(response.status_code, 302)
+                templates = [t.name for t in response.templates]
+                self.assertNotIn("socialaccount/login.html", templates)
+
+    def test_social_auto_signup_enabled(self):
+        self.assertTrue(
+            getattr(settings, "SOCIALACCOUNT_AUTO_SIGNUP", False)
+        )
+        self.assertTrue(
+            getattr(settings, "SOCIALACCOUNT_LOGIN_ON_GET", False)
+        )
 
 
 class TaskCRUDTests(TestCase):
