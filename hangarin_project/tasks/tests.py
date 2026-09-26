@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -1452,3 +1453,84 @@ class RootRouteTests(TestCase):
 
     def test_login_redirect_url_remains_root(self):
         self.assertEqual(settings.LOGIN_REDIRECT_URL, "/")
+
+
+class SeedCommandTests(TestCase):
+    """create_initial_data: deterministic local dev dataset.
+
+    Runs against the empty test database, so every assertion below also
+    locks in the command's exact output (30 tasks, fixed distributions).
+    """
+
+    def run_seed(self):
+        call_command("create_initial_data", verbosity=0)
+
+    def test_dev_user_created_with_unusable_password(self):
+        self.run_seed()
+        user = get_user_model().objects.get(username="dev_seed_user")
+        self.assertEqual(user.email, "dev_seed_user@example.local")
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.has_usable_password())
+
+    def test_expected_priorities_and_categories_exist(self):
+        self.run_seed()
+        self.assertEqual(
+            set(Priority.objects.values_list("name", flat=True)),
+            {"high", "medium", "low", "critical", "optional"},
+        )
+        self.assertEqual(
+            set(Category.objects.values_list("name", flat=True)),
+            {"Work", "School", "Personal", "Finance", "Projects"},
+        )
+
+    def test_thirty_tasks_all_owned_by_dev_user(self):
+        self.run_seed()
+        tasks = Task.objects.all()
+        self.assertEqual(tasks.count(), 30)
+        owners = set(tasks.values_list("user__username", flat=True))
+        self.assertEqual(owners, {"dev_seed_user"})
+
+    def test_deterministic_status_priority_category_distributions(self):
+        self.run_seed()
+        tasks = Task.objects.all()
+        self.assertEqual(tasks.filter(status="Pending").count(), 15)
+        self.assertEqual(tasks.filter(status="In Progress").count(), 9)
+        self.assertEqual(tasks.filter(status="Completed").count(), 6)
+        self.assertEqual(
+            {p: tasks.filter(priority__name=p).count() for p in
+             ("critical", "high", "medium", "low", "optional")},
+            {"critical": 4, "high": 7, "medium": 9,
+             "low": 6, "optional": 4},
+        )
+        self.assertEqual(
+            {c: tasks.filter(category__name=c).count() for c in
+             ("Work", "School", "Personal", "Finance", "Projects")},
+            {"Work": 7, "School": 8, "Personal": 6,
+             "Finance": 4, "Projects": 5},
+        )
+
+    def test_deadlines_cover_overdue_and_upcoming(self):
+        self.run_seed()
+        now = timezone.now()
+        overdue = Task.objects.filter(deadline__lt=now).exclude(
+            status="Completed"
+        )
+        upcoming = Task.objects.filter(deadline__gt=now)
+        self.assertGreaterEqual(overdue.count(), 3)
+        self.assertGreater(upcoming.count(), 10)
+
+    def test_subtasks_and_notes_generated(self):
+        self.run_seed()
+        self.assertGreater(SubTask.objects.count(), 30)
+        self.assertGreater(Note.objects.count(), 10)
+        # Ownership derives through the parent Task.
+        self.assertEqual(
+            set(SubTask.objects.values_list(
+                "task__user__username", flat=True)),
+            {"dev_seed_user"},
+        )
+
+    def test_rerun_does_not_duplicate_tasks(self):
+        self.run_seed()
+        self.run_seed()
+        self.assertEqual(Task.objects.count(), 30)
