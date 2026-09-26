@@ -3,4 +3,5 @@ Django==6.1
 Faker==40.36.0
 sqlparse==0.6.0
 django-allauth==65.19.4
+PyJWT==2.15.0
 requests==2.34.2
