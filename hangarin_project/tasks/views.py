@@ -72,6 +72,45 @@ def _owned_task_or_404(request, pk):
     return get_object_or_404(Task.objects.filter(user=request.user), pk=pk)
 
 
+def deadline_state(task, now):
+    """Compact relative deadline label for task cards.
+
+    Returns None for completed tasks so they never display "Overdue".
+    All comparisons are timezone-aware; day math uses calendar dates.
+    """
+    if task.status == "Completed":
+        return None
+    if task.deadline < now:
+        return "Overdue"
+    days = (task.deadline.date() - now.date()).days
+    if days == 0:
+        return "Due today"
+    if days == 1:
+        return "Due tomorrow"
+    if days <= 7:
+        return f"{days} days left"
+    return "Later"
+
+
+def annotate_card_display(tasks, now):
+    """Attach per-card display values (overdue, deadline label, progress).
+
+    Pure presentation data derived from fields already on each task;
+    ownership and business logic are untouched.
+    """
+    cards = list(tasks)
+    for task in cards:
+        task.is_overdue = task.deadline < now and task.status != "Completed"
+        task.deadline_state = deadline_state(task, now)
+        if task.subtask_total:
+            task.subtask_pct = min(
+                100, round(task.subtask_done * 100 / task.subtask_total)
+            )
+        else:
+            task.subtask_pct = None
+    return cards
+
+
 @login_required
 def task_list(request):
     # Ownership boundary: every filter/sort below narrows this
@@ -118,13 +157,20 @@ def task_list(request):
     # the same query — no per-card queries.
     tasks = tasks.annotate(
         subtask_total=Count("subtask"),
-        subtask_done=Count("subtask", filter=Q(status="Completed")),
+        # NOTE: the filter must use the `subtask__` prefix — a bare
+        # `Q(status=...)` would match Task.status instead of SubTask.status.
+        subtask_done=Count(
+            "subtask", filter=Q(subtask__status="Completed")
+        ),
     ).order_by(SORT_ORDERINGS.get(sort, "-created_at"))
     if sort not in SORT_ORDERINGS:
         sort = "newest"
 
+    # Per-card display values (overdue flag, relative deadline label,
+    # subtask progress %) computed in Python — no datetime arithmetic
+    # in templates. Reuses the `now` already used for deadline filters.
     context = {
-        "tasks": tasks,
+        "tasks": annotate_card_display(tasks, now),
         "status_filter": status_filter,
         "priority_filter": priority_filter,
         "category_filter": category_filter,
@@ -150,7 +196,11 @@ def task_kanban(request):
         Task.objects.filter(user=request.user)
         .annotate(
             subtask_total=Count("subtask"),
-            subtask_done=Count("subtask", filter=Q(status="Completed")),
+            # Same prefix requirement as in task_list: filter the joined
+            # SubTask rows, not Task.status.
+            subtask_done=Count(
+                "subtask", filter=Q(subtask__status="Completed")
+            ),
         )
         .order_by("-created_at")
     )

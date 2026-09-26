@@ -1569,3 +1569,99 @@ class SeedCommandTests(TestCase):
         self.run_seed()
         self.run_seed()
         self.assertEqual(Task.objects.count(), 30)
+
+
+class TaskCardVisualTests(TestCase):
+    """Task-card display values: overdue badge, deadline states, progress."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.alice = User.objects.create_user(username="alice", password="x")
+        cls.priority = Priority.objects.create(name="high")
+        cls.category = Category.objects.create(name="Work")
+
+    def make_task(self, title, status="Pending", days_offset=2,
+                  hours_offset=0):
+        return Task.objects.create(
+            user=self.alice,
+            title=title,
+            description="desc",
+            status=status,
+            deadline=timezone.now()
+            + timedelta(days=days_offset, hours=hours_offset),
+            priority=self.priority,
+            category=self.category,
+        )
+
+    def card_html(self, **kwargs):
+        self.client.force_login(self.alice)
+        created = self.make_task(**kwargs)
+        response = self.client.get(reverse("task_list"))
+        self.assertEqual(response.status_code, 200)
+        # The display values live on the view-annotated instances.
+        card = next(
+            t for t in response.context["tasks"] if t.pk == created.pk
+        )
+        return card, response.content.decode()
+
+    def test_active_overdue_task_shows_overdue_badge(self):
+        task, html = self.card_html(title="Overdue active", days_offset=-2)
+        self.assertTrue(task.is_overdue)
+        self.assertEqual(task.deadline_state, "Overdue")
+        self.assertIn("badge-overdue", html)
+        self.assertIn(
+            'class="deadline-state deadline-overdue">Overdue</span>', html
+        )
+
+    def test_completed_past_deadline_never_marked_overdue(self):
+        task, html = self.card_html(
+            title="Done late", status="Completed", days_offset=-5
+        )
+        self.assertFalse(task.is_overdue)
+        self.assertIsNone(task.deadline_state)
+        self.assertNotIn("badge-overdue", html)
+        self.assertNotIn("deadline-state", html)
+
+    def test_subtask_progress_bar_with_correct_percentage(self):
+        task, html = self.card_html(title="With subs", days_offset=3)
+        SubTask.objects.create(
+            task=task, title="done", status="Completed"
+        )
+        SubTask.objects.create(
+            task=task, title="todo", status="Pending"
+        )
+        html = self.client.get(reverse("task_list")).content.decode()
+        self.assertIn('role="progressbar"', html)
+        self.assertIn("1/2 subtasks done", html)
+        self.assertIn("width: 50%;", html)
+
+    def test_no_progress_bar_without_subtasks(self):
+        _, html = self.card_html(title="No subs", days_offset=3)
+        self.assertNotIn('role="progressbar"', html)
+
+    def test_deadline_states(self):
+        cases = [
+            # (days, hours, status, expected); hours keep "today" safely
+            # in the future so the test never depends on wall-clock ms.
+            (-2, 0, "Pending", "Overdue"),
+            (0, 2, "Pending", "Due today"),
+            (1, 0, "Pending", "Due tomorrow"),
+            (3, 0, "Pending", "3 days left"),
+            (20, 0, "Pending", "Later"),
+        ]
+        for days, hours, status, expected in cases:
+            with self.subTest(days=days, hours=hours):
+                task = self.make_task(
+                    title=f"State {days}d{hours}h",
+                    status=status,
+                    days_offset=days,
+                    hours_offset=hours,
+                )
+                # Refresh through the view's annotation path.
+                self.client.force_login(self.alice)
+                response = self.client.get(reverse("task_list"))
+                card = next(
+                    t for t in response.context["tasks"] if t.pk == task.pk
+                )
+                self.assertEqual(card.deadline_state, expected)

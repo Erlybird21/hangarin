@@ -69,7 +69,7 @@
 {% if tasks %}
 <ul class="stack">
     {% for task in tasks %}
-    <li class="task-card">
+    <li class="task-card" style="--d:{{ forloop.counter0 }};">
         <div class="task-card-top">
             <h2 class="task-title"><a href="{% url 'task_detail' task.pk %}">{{ task.title }}</a></h2>
             {% if task.status == "Pending" %}
@@ -79,6 +79,9 @@
             {% else %}
             <span class="badge badge-completed"><span class="dot" aria-hidden="true"></span>Completed</span>
             {% endif %}
+            {% if task.is_overdue %}
+            <span class="badge badge-overdue"><span class="dot" aria-hidden="true"></span>Overdue</span>
+            {% endif %}
         </div>
         {% if task.description %}
         <p class="task-desc">{{ task.description|truncatewords:25 }}</p>
@@ -86,9 +89,10 @@
         <div class="task-meta">
             <span class="tag">{{ task.priority.name }}</span>
             <span class="tag">{{ task.category.name }}</span>
-            <span>Due {{ task.deadline|date:"M d, Y H:i" }}</span>
+            <span>Due {{ task.deadline|date:"M d, Y H:i" }}{% if task.deadline_state %} · <span class="deadline-state{% if task.is_overdue %} deadline-overdue{% endif %}">{{ task.deadline_state }}</span>{% endif %}</span>
             {% if task.subtask_total %}
             <span>{{ task.subtask_done }}/{{ task.subtask_total }} subtasks done</span>
+            <span class="subtask-progress" role="progressbar" aria-label="Subtask progress" aria-valuemin="0" aria-valuemax="{{ task.subtask_total }}" aria-valuenow="{{ task.subtask_done }}"><span style="width: {{ task.subtask_pct }}%;"></span></span>
             {% endif %}
         </div>
         <div class="task-actions">
