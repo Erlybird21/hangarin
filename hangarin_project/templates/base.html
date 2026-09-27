@@ -26,7 +26,6 @@
         {% endwith %}
         <div class="account-area">
             <span>{{ request.user.username }}</span>
-            <a class="nav-link" href="{% url 'account_email' %}">Verify email</a>
             <a class="nav-link" href="{% url 'account_logout' %}">Logout</a>
         </div>
         {% else %}
