@@ -134,6 +134,12 @@ SOCIALACCOUNT_PROVIDERS = {
             "client_id": os.environ.get("GOOGLE_OAUTH_CLIENT_ID", ""),
             "secret": os.environ.get("GOOGLE_OAUTH_SECRET", ""),
             "key": "",
+            # Provider-specific email authentication (allauth 65.x reads
+            # provider.app.settings). Lets a verified Google email
+            # authenticate the existing local user with the same email
+            # instead of showing the third-party signup form. GitHub has
+            # no such key, so GitHub behavior is unchanged.
+            "settings": {"email_authentication": True},
         },
         "SCOPE": ["profile", "email"],
         "AUTH_PARAMS": {"access_type": "online"},
@@ -157,6 +163,12 @@ SOCIALACCOUNT_LOGIN_ON_GET = True
 # (unique verified email from the provider). Existing associations log in
 # directly. This is the allauth default; set explicitly to document intent.
 SOCIALACCOUNT_AUTO_SIGNUP = True
+
+# After a verified Google email authenticates an existing local user,
+# automatically connect the Google SocialAccount to that user so future
+# Google logins are direct. No global SOCIALACCOUNT_EMAIL_AUTHENTICATION
+# is set: Google opts in via its APP settings above, GitHub is untouched.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

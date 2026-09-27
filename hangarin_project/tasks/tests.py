@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import CommandError, call_command
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -266,6 +266,316 @@ class SocialConfirmPageTests(TestCase):
         self.assertTrue(
             getattr(settings, "SOCIALACCOUNT_LOGIN_ON_GET", False)
         )
+
+
+class GoogleEmailAuthenticationTests(TestCase):
+    """Verified-Google-email authentication for existing local users.
+
+    Uses the real installed django-allauth APIs (no network, no mocks):
+    provider.sociallogin_from_response() builds the SocialLogin exactly
+    as the Google callback would, then adapter.authenticate_by_email()
+    and SocialLogin.lookup() exercise the production matching logic.
+    """
+
+    def make_request(self):
+        return RequestFactory().get("/", HTTP_HOST="testserver")
+
+    def google_login(self, request, email, verified=True,
+                     uid="google-uid-1"):
+        from allauth.socialaccount.adapter import get_adapter
+
+        provider = get_adapter().get_provider(request, "google")
+        data = {
+            "sub": uid,
+            "email": email,
+            "email_verified": verified,
+            "given_name": "Erly",
+            "family_name": "Bird",
+        }
+        return provider.sociallogin_from_response(request, data)
+
+    def test_existing_user_matched_by_verified_google_email(self):
+        User = get_user_model()
+        existing = User.objects.create_user(
+            username="erlybird21",
+            email="erly@example.com",
+            password="x",
+        )
+        request = self.make_request()
+        login = self.google_login(
+            request, "erly@example.com", verified=True
+        )
+        from allauth.socialaccount.adapter import get_adapter
+
+        result = get_adapter().authenticate_by_email(login)
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], existing)
+        self.assertEqual(result[1], "erly@example.com")
+        # lookup() resolves the existing user, so the login flow takes
+        # the existing-user path instead of /accounts/3rdparty/signup/.
+        login.lookup()
+        self.assertEqual(login.user, existing)
+        self.assertTrue(login.is_existing)
+
+    def test_google_socialaccount_auto_connected(self):
+        from allauth.socialaccount.adapter import get_adapter
+        from allauth.socialaccount.models import SocialAccount
+
+        self.assertTrue(
+            getattr(
+                settings,
+                "SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT",
+                False,
+            )
+        )
+        User = get_user_model()
+        existing = User.objects.create_user(
+            username="erlybird21",
+            email="erly@example.com",
+            password="x",
+        )
+        request = self.make_request()
+        login = self.google_login(
+            request, "erly@example.com", verified=True,
+            uid="google-uid-9",
+        )
+        login.lookup()
+        self.assertEqual(login.user, existing)
+        # Same connect() call allauth runs after email authentication.
+        login.connect(request, existing)
+        self.assertTrue(
+            SocialAccount.objects.filter(
+                provider="google",
+                uid="google-uid-9",
+                user=existing,
+            ).exists()
+        )
+
+    def test_new_google_email_still_auto_signup_path(self):
+        request = self.make_request()
+        login = self.google_login(
+            request, "brandnew@example.com", verified=True,
+            uid="google-uid-new",
+        )
+        from allauth.socialaccount.adapter import get_adapter
+
+        self.assertIsNone(get_adapter().authenticate_by_email(login))
+        login.lookup()
+        # No existing user: normal automatic signup flow is preserved.
+        self.assertFalse(login.is_existing)
+
+    def test_github_email_authentication_not_enabled(self):
+        User = get_user_model()
+        User.objects.create_user(
+            username="ghuser",
+            email="gh@example.com",
+            password="x",
+        )
+        request = self.make_request()
+        from allauth.socialaccount.adapter import get_adapter
+
+        provider = get_adapter().get_provider(request, "github")
+        data = {
+            "id": 424242,
+            "login": "ghuser",
+            "emails": [
+                {
+                    "email": "gh@example.com",
+                    "primary": True,
+                    "verified": True,
+                }
+            ],
+        }
+        login = provider.sociallogin_from_response(request, data)
+        self.assertFalse(
+            get_adapter().can_authenticate_by_email(
+                login, "gh@example.com"
+            )
+        )
+        self.assertIsNone(get_adapter().authenticate_by_email(login))
+
+    def test_unverified_google_email_not_matched(self):
+        User = get_user_model()
+        User.objects.create_user(
+            username="erlybird21",
+            email="erly@example.com",
+            password="x",
+        )
+        request = self.make_request()
+        login = self.google_login(
+            request, "erly@example.com", verified=False,
+            uid="google-uid-unverified",
+        )
+        from allauth.socialaccount.adapter import get_adapter
+
+        # Only verified provider emails may authenticate an existing
+        # account; unverified emails must never match.
+        self.assertIsNone(get_adapter().authenticate_by_email(login))
+
+    def test_verified_email_then_google_login_preserves_password(self):
+        import re
+
+        from django.core import mail
+        from django.urls import reverse
+
+        from allauth.account.models import EmailAddress
+        from allauth.socialaccount.models import SocialAccount
+
+        User = get_user_model()
+        existing = User.objects.create_user(
+            username="erlybird21",
+            email="erly@example.com",
+            password="localpass123",
+        )
+        self.assertTrue(existing.has_usable_password())
+        self.assertFalse(
+            EmailAddress.objects.filter(user=existing).exists()
+        )
+        # Log in with the local password.
+        self.assertTrue(
+            self.client.login(
+                username="erlybird21", password="localpass123"
+            )
+        )
+        # Open email management: allauth syncs the User.email field into
+        # an unverified EmailAddress row (normal flow, no manual insert).
+        response = self.client.get(reverse("account_email"))
+        self.assertEqual(response.status_code, 200)
+        address = EmailAddress.objects.get(
+            user=existing, email="erly@example.com"
+        )
+        self.assertFalse(address.verified)
+        # Request verification with the real EmailView action field names.
+        response = self.client.post(
+            reverse("account_email"),
+            {
+                "email": "erly@example.com",
+                "action_send": "Re-send Verification",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["erly@example.com"])
+        bodies = [mail.outbox[0].body]
+        bodies.extend(
+            content
+            for _mimetype, content in getattr(
+                mail.outbox[0], "alternatives", []
+            )
+        )
+        match = re.search(
+            r"/accounts/confirm-email/([-\w:]+)/", "\n".join(bodies)
+        )
+        self.assertIsNotNone(
+            match, "confirmation URL missing from verification email"
+        )
+        confirm_url = reverse(
+            "account_confirm_email", args=[match.group(1)]
+        )
+        # CONFIRM_EMAIL_ON_GET is False, so verification needs the POST.
+        response = self.client.post(confirm_url)
+        self.assertEqual(response.status_code, 302)
+        address.refresh_from_db()
+        self.assertTrue(address.verified)
+        self.assertTrue(address.primary)
+        existing.refresh_from_db()
+        self.assertTrue(existing.has_usable_password())
+        # Verified Google login over the real callback path.
+        from django.contrib.auth.models import AnonymousUser
+        from django.contrib.messages.storage.fallback import (
+            FallbackStorage,
+        )
+        from django.contrib.sessions.backends.db import SessionStore
+
+        from allauth.core.context import request_context
+        from allauth.socialaccount.helpers import complete_social_login
+
+        request = self.make_request()
+        request.session = SessionStore()
+        request.session.create()
+        request._messages = FallbackStorage(request)
+        request.user = AnonymousUser()
+        login = self.google_login(
+            request, "erly@example.com", verified=True,
+            uid="google-uid-safe",
+        )
+        from allauth.socialaccount.adapter import get_adapter
+
+        result = get_adapter().authenticate_by_email(login)
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], existing)
+        with request_context(request):
+            response = complete_social_login(request, login)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            request.session.get("_auth_user_id"), str(existing.pk)
+        )
+        self.assertTrue(
+            SocialAccount.objects.filter(
+                provider="google",
+                uid="google-uid-safe",
+                user=existing,
+            ).exists()
+        )
+        existing.refresh_from_db()
+        self.assertTrue(existing.has_usable_password())
+
+    def test_email_auth_wipes_password_without_emailaddress_record(self):
+        from django.contrib.messages.storage.fallback import (
+            FallbackStorage,
+        )
+        from django.contrib.sessions.backends.db import SessionStore
+
+        from allauth.account.models import EmailAddress
+        from allauth.socialaccount.helpers import complete_social_login
+        from allauth.socialaccount.models import SocialAccount
+
+        User = get_user_model()
+        existing = User.objects.create_user(
+            username="erlybird21",
+            email="erly@example.com",
+            password="localpass123",
+        )
+        self.assertTrue(existing.has_usable_password())
+        # Production Erlybird21 state: no allauth EmailAddress record.
+        self.assertFalse(
+            EmailAddress.objects.filter(user=existing).exists()
+        )
+        request = self.make_request()
+        request.session = SessionStore()
+        request.session.create()
+        request._messages = FallbackStorage(request)
+        from django.contrib.auth.models import AnonymousUser
+
+        request.user = AnonymousUser()
+        login = self.google_login(
+            request, "erly@example.com", verified=True,
+            uid="google-uid-wipe",
+        )
+        # Exact function the OAuth callback view calls after Google auth.
+        # allauth resolves the ambient request via its context var
+        # (normally set by middleware), so set it explicitly here.
+        from allauth.core.context import request_context
+
+        with request_context(request):
+            response = complete_social_login(request, login)
+        self.assertEqual(response.status_code, 302)
+        # User is authenticated successfully.
+        self.assertEqual(
+            request.session.get("_auth_user_id"), str(existing.pk)
+        )
+        # Google SocialAccount is connected to the existing user.
+        self.assertTrue(
+            SocialAccount.objects.filter(
+                provider="google",
+                uid="google-uid-wipe",
+                user=existing,
+            ).exists()
+        )
+        # allauth's attacker-trap protection wipes the local password
+        # because the matched email had no verified EmailAddress record.
+        existing.refresh_from_db()
+        self.assertFalse(existing.has_usable_password())
 
 
 class TaskCRUDTests(TestCase):
